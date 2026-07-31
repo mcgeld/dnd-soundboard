@@ -12,7 +12,7 @@ using SoundBoard.Models;
 namespace SoundBoard.Services;
 
 /// <summary>
-/// Hardware MIDI listener, volume sync, LED feedback controller, and interactive Stem Assignment & Clear Manager.
+/// Hardware MIDI listener, volume sync, LED feedback controller, and interactive Stem & Preset Assignment / Save Manager.
 /// </summary>
 public class MidiHardwareService : IDisposable
 {
@@ -22,13 +22,14 @@ public class MidiHardwareService : IDisposable
     private readonly List<OutputDevice> _outputDevices = new();
     private readonly AudioEngine _audioEngine;
     private readonly HudService? _hudService;
+    private readonly PresetStorageService _presetStorageService;
     private List<Category> _categories = new();
     private readonly Timer _flashTimer;
     private bool _flashPhase = false;
 
     private FourBitNumber _hardwareMidiChannel = (FourBitNumber)0;
 
-    // Interactive Stem Assignment Wizard State
+    // Interactive Channel Assignment Wizard State
     private StemAssignmentWizard? _activeWizard;
     private readonly Timer?[] _longPressTimers = new Timer?[8];
     private readonly bool[] _isOperationHeld = new bool[8];
@@ -39,6 +40,11 @@ public class MidiHardwareService : IDisposable
     private readonly Timer?[] _muteLongPressTimers = new Timer?[8];
     private readonly bool[] _isMuteHeld = new bool[8];
     private readonly bool[] _wasMuteLongPressHandled = new bool[8];
+
+    // Interactive Preset Creation / Save State (Note 107)
+    private bool _isPresetSaveActive = false;
+    private bool _isPresetNamingStep = false;
+    private readonly bool[] _presetSelectedChannels = new bool[8];
 
     // Hardware Control Dirty Flags & Motion Soft-Catch State
     private readonly bool[] _isFaderDirty = new bool[8];
@@ -60,11 +66,18 @@ public class MidiHardwareService : IDisposable
     public const byte LedGreenFull = 60;  // Velocity 60 = Clean Green
     public const byte LedAmberFull = 62;  // Velocity 62 = Clean Amber / Yellow
 
-    public MidiHardwareService(AudioEngine audioEngine, HudService? hudService = null)
+    public MidiHardwareService(AudioEngine audioEngine, HudService? hudService = null, PresetStorageService? presetStorageService = null)
     {
         _audioEngine = audioEngine;
         _hudService = hudService;
+        _presetStorageService = presetStorageService ?? new PresetStorageService();
         _flashTimer = new Timer(OnFlashTimerTick, null, 400, 400);
+
+        if (_hudService != null)
+        {
+            _hudService.OnPresetSaveSubmitted += OnPresetNameSubmitted;
+            _hudService.OnPresetSaveCancelled += CancelPresetSave;
+        }
 
         for (int i = 0; i < 8; i++)
         {
@@ -226,6 +239,12 @@ public class MidiHardwareService : IDisposable
             cancelledAny = true;
         }
 
+        if (_isPresetSaveActive)
+        {
+            CancelPresetSave();
+            cancelledAny = true;
+        }
+
         if (cancelledAny)
         {
             UpdateAllLeds();
@@ -260,14 +279,14 @@ public class MidiHardwareService : IDisposable
                 }
             }
 
-            if (_activeClearWizard != null)
+            if (_activeClearWizard != null || _isPresetSaveActive)
             {
                 CancelActiveWizardsIfOtherControlTouched(chIdx, isTargetChannelControl: false);
             }
 
             var ch = _audioEngine.Channels[chIdx];
 
-            // Dirty Fader Soft-Catch Handling (Show Unified Channel Overview HUD)
+            // Dirty Fader Soft-Catch Handling
             if (_isFaderDirty[chIdx])
             {
                 if (!_isFaderMoving[chIdx])
@@ -581,6 +600,61 @@ public class MidiHardwareService : IDisposable
             return;
         }
 
+        // PRESET CREATION / SAVE BUTTON (Note 107)
+        if (note == 107)
+        {
+            if (isNoteOn)
+            {
+                if (!_isPresetSaveActive)
+                {
+                    // Step 1: Start Preset Creation Mode
+                    Console.WriteLine("[Preset Save] Note 107 Pressed -> Entering Preset Creation Mode");
+                    CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
+
+                    _isPresetSaveActive = true;
+                    _isPresetNamingStep = false;
+
+                    // By default, select all channels that have loaded stems
+                    for (int c = 0; c < 8; c++)
+                    {
+                        _presetSelectedChannels[c] = _audioEngine.Channels[c].LoadedStem != null;
+                    }
+
+                    UpdateAllLeds();
+                    _hudService?.ShowPresetSaveWindow(_audioEngine.Channels, _presetSelectedChannels);
+                }
+                else if (!_isPresetNamingStep)
+                {
+                    // Step 2: Confirm Channel Selection & Transition to Auto-Focused Naming Step
+                    Console.WriteLine("[Preset Save] Note 107 Pressed -> Confirming Channel Selection & Transitioning to Naming Step");
+
+                    // Verify at least 1 channel is selected
+                    bool hasAny = false;
+                    for (int c = 0; c < 8; c++)
+                    {
+                        if (_presetSelectedChannels[c]) { hasAny = true; break; }
+                    }
+
+                    if (!hasAny)
+                    {
+                        Console.WriteLine("[Preset Save Warning] No channels selected to include in preset.");
+                        return;
+                    }
+
+                    _isPresetNamingStep = true;
+                    UpdateAllLeds();
+                    _hudService?.TransitionPresetSaveToNaming();
+                }
+                else
+                {
+                    // Step 3: Confirm Preset Name Submission
+                    Console.WriteLine("[Preset Save] Note 107 Pressed -> Submitting Preset Name");
+                    _hudService?.SubmitPresetSaveName();
+                }
+            }
+            return;
+        }
+
         // TOP ROW BUTTONS (MUTE / BACK / CANCEL / CLEAR LONG-PRESS) -> Notes 41..44 (Ch 0..3) & 57..60 (Ch 4..7)
         int muteChIdx = -1;
         if (note >= 41 && note <= 44) muteChIdx = note - 41;
@@ -620,7 +694,7 @@ public class MidiHardwareService : IDisposable
             return;
         }
 
-        // BOTTOM ROW BUTTONS (OPERATION / CONFIRM / SWAP MOVE GESTURE) -> Notes 73..76 (Ch 0..3) & 89..92 (Ch 4..7)
+        // BOTTOM ROW BUTTONS (OPERATION / CONFIRM / PRESET SELECTION TOGGLE / SWAP MOVE GESTURE) -> Notes 73..76 (Ch 0..3) & 89..92 (Ch 4..7)
         int operChIdx = -1;
         if (note >= 73 && note <= 76) operChIdx = note - 73;
         else if (note >= 89 && note <= 96) operChIdx = note - 89 + 4;
@@ -629,6 +703,19 @@ public class MidiHardwareService : IDisposable
         {
             if (isNoteOn)
             {
+                // PRESET CREATION MODE: Toggle channel selection via Operation Buttons!
+                if (_isPresetSaveActive && !_isPresetNamingStep)
+                {
+                    if (_audioEngine.Channels[operChIdx].LoadedStem != null)
+                    {
+                        _presetSelectedChannels[operChIdx] = !_presetSelectedChannels[operChIdx];
+                        Console.WriteLine($"[Preset Save] Channel {operChIdx + 1} Selection Toggled -> {(_presetSelectedChannels[operChIdx] ? "INCLUDED (Green)" : "REMOVED (Amber)")}");
+                        UpdateAllLeds();
+                        _hudService?.UpdatePresetSaveWindow(_audioEngine.Channels, _presetSelectedChannels);
+                    }
+                    return;
+                }
+
                 // CHECK FOR CHANNEL MOVE/SWAP GESTURE: Is another Operation button held down right now?
                 int heldCh = -1;
                 for (int c = 0; c < 8; c++)
@@ -660,14 +747,12 @@ public class MidiHardwareService : IDisposable
                     {
                         Console.WriteLine($"[MIDI MOVE GESTURE] Moving Stem '[{stemToMove.Name}]' from Channel {heldCh + 1} -> Channel {operChIdx + 1}");
 
-                        // 1. Capture exact source channel Mute state & Volume levels
                         bool wasMuted = chSrc.IsMuted;
                         float masterVol = chSrc.MasterVolume;
                         float k0 = chSrc.TrackVolumes[0];
                         float k1 = chSrc.TrackVolumes[1];
                         float k2 = chSrc.TrackVolumes[2];
 
-                        // 2. Unload source channel (goes dark)
                         _audioEngine.LoadStemToChannel(heldCh, null);
                         _isFaderDirty[heldCh] = false;
                         _isFaderMoving[heldCh] = false;
@@ -677,10 +762,8 @@ public class MidiHardwareService : IDisposable
                             _isKnobMoving[heldCh][t] = false;
                         }
 
-                        // 3. Load destination channel
                         _audioEngine.LoadStemToChannel(operChIdx, stemToMove);
 
-                        // 4. Preserve source Mute state & Volume levels
                         var chDst = _audioEngine.Channels[operChIdx];
                         chDst.IsMuted = wasMuted;
                         chDst.MasterVolume = masterVol;
@@ -690,7 +773,6 @@ public class MidiHardwareService : IDisposable
 
                         _audioEngine.UpdateChannelEffectiveVolumes(operChIdx, immediate: true);
 
-                        // 5. MARK DESTINATION CONTROLS DIRTY! (Physical controls don't match copied volumes)
                         _isFaderDirty[operChIdx] = true;
                         _isFaderMoving[operChIdx] = false;
 
@@ -752,7 +834,7 @@ public class MidiHardwareService : IDisposable
             return;
         }
 
-        // SIDEBOARD MACRO BUTTONS (Notes 104, 105, 107, 108)
+        // SIDEBOARD MACRO BUTTONS (Notes 104, 108)
         if (isNoteOn && (_activeWizard != null || _activeClearWizard != null))
         {
             CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
@@ -768,14 +850,14 @@ public class MidiHardwareService : IDisposable
                 bool cancelled = _activeWizard.GoBackOrCancel(_lastFaderVol[chIdx]);
                 if (cancelled)
                 {
-                    Console.WriteLine($"[Wizard] Cancelled stem assignment for Channel {_activeWizard.TargetChannelIndex + 1}.");
+                    Console.WriteLine($"[Wizard] Cancelled channel assignment for Channel {_activeWizard.TargetChannelIndex + 1}.");
                     _activeWizard = null;
                     _hudService?.CloseAssignmentWizard();
                     UpdateAllLeds();
                 }
                 else
                 {
-                    Console.WriteLine($"[Wizard] Returned to Category selection for Channel {_activeWizard.TargetChannelIndex + 1}.");
+                    Console.WriteLine($"[Wizard] Went back in assignment wizard for Channel {_activeWizard.TargetChannelIndex + 1}.");
                     _hudService?.UpdateAssignmentWizard(_activeWizard);
                 }
                 return;
@@ -800,6 +882,12 @@ public class MidiHardwareService : IDisposable
             {
                 CancelActiveWizardsIfOtherControlTouched(chIdx, isTargetChannelControl: false);
             }
+        }
+
+        if (_isPresetSaveActive)
+        {
+            CancelPresetSave();
+            return;
         }
 
         bool muted = _audioEngine.ToggleMute(chIdx);
@@ -868,43 +956,107 @@ public class MidiHardwareService : IDisposable
         {
             if (_activeWizard.TargetChannelIndex == chIdx)
             {
-                bool finished = _activeWizard.ConfirmNextStep(_lastFaderVol[chIdx], out Stem? finalStem);
+                bool finished = _activeWizard.ConfirmNextStep(_lastFaderVol[chIdx], out Stem? finalStem, out Preset? finalPreset);
 
                 if (!finished)
                 {
-                    Console.WriteLine($"[Wizard] Channel {chIdx + 1} confirmed category '{_activeWizard.CurrentCategory?.Name}'. Moving to Stem selection.");
+                    Console.WriteLine($"[Wizard] Channel {chIdx + 1} confirmed wizard step. Moving forward.");
                     _hudService?.UpdateAssignmentWizard(_activeWizard);
                 }
                 else
                 {
                     int targetCh = _activeWizard.TargetChannelIndex;
-                    if (finalStem != null)
+
+                    if (finalPreset != null)
                     {
+                        // LOAD MULTI-CHANNEL PRESET SEQUENTIALLY STARTING AT targetCh
+                        Console.WriteLine($"[Wizard] Channel {targetCh + 1} loading Preset '[{finalPreset.Name}]' with {finalPreset.ChannelSnapshots.Count} channel snapshot(s)...");
+
+                        foreach (var snap in finalPreset.ChannelSnapshots)
+                        {
+                            int destCh = targetCh + snap.RelativeChannelIndex;
+                            if (destCh >= 8) break; // Exceeds board channels
+
+                            // Find matching stem in categories
+                            Category? cat = _categories.FirstOrDefault(c => c.Name.Equals(snap.CategoryName, StringComparison.OrdinalIgnoreCase));
+                            Stem? stemToLoad = cat?.Stems.FirstOrDefault(s => s.Name.Equals(snap.StemName, StringComparison.OrdinalIgnoreCase));
+
+                            if (stemToLoad != null)
+                            {
+                                _audioEngine.LoadStemToChannel(destCh, stemToLoad);
+                                var chDest = _audioEngine.Channels[destCh];
+                                chDest.IsMuted = snap.IsMuted;
+                                chDest.MasterVolume = snap.MasterVolume;
+                                for (int t = 0; t < 3; t++)
+                                {
+                                    if (t < snap.TrackVolumes.Length)
+                                    {
+                                        chDest.TrackVolumes[t] = snap.TrackVolumes[t];
+                                    }
+                                }
+                                _audioEngine.UpdateChannelEffectiveVolumes(destCh, immediate: true);
+
+                                // Mark controls dirty for soft-catch
+                                _isFaderDirty[destCh] = true;
+                                _isFaderMoving[destCh] = false;
+                                int tCount = stemToLoad.Tracks.Count;
+                                for (int t = 0; t < 3; t++)
+                                {
+                                    _isKnobDirty[destCh][t] = t < tCount;
+                                    _isKnobMoving[destCh][t] = false;
+                                }
+
+                                Console.WriteLine($"[Preset Load] Loaded '{stemToLoad.Name}' -> Channel {destCh + 1}");
+                            }
+                        }
+
+                        _activeWizard = null;
+                        _hudService?.CloseAssignmentWizard();
+                        UpdateAllLeds();
+
+                        _hudService?.ShowChannelOverview(
+                            targetCh,
+                            _audioEngine.Channels[targetCh],
+                            activeControl: "",
+                            isFaderDirty: _isFaderDirty[targetCh],
+                            isFaderMoving: _isFaderMoving[targetCh],
+                            isKnobDirty: _isKnobDirty[targetCh],
+                            isKnobMoving: _isKnobMoving[targetCh],
+                            lastFaderVol: _lastFaderVol,
+                            lastKnobVol: _lastKnobVol,
+                            dismissDelayMs: 3000
+                        );
+                    }
+                    else if (finalStem != null)
+                    {
+                        // LOAD SINGLE STEM
                         Console.WriteLine($"[Wizard] Channel {targetCh + 1} assigning Stem '[{finalStem.Name}]' ({finalStem.CategoryName}).");
                         _audioEngine.LoadStemToChannel(targetCh, finalStem);
                         SyncChannelHardwareVolume(targetCh);
+
+                        _activeWizard = null;
+                        _hudService?.CloseAssignmentWizard();
+                        UpdateAllLeds();
+
+                        _hudService?.ShowChannelOverview(
+                            targetCh,
+                            _audioEngine.Channels[targetCh],
+                            activeControl: "",
+                            isFaderDirty: _isFaderDirty[targetCh],
+                            isFaderMoving: _isFaderMoving[targetCh],
+                            isKnobDirty: _isKnobDirty[targetCh],
+                            isKnobMoving: _isKnobMoving[targetCh],
+                            lastFaderVol: _lastFaderVol,
+                            lastKnobVol: _lastKnobVol,
+                            dismissDelayMs: 3000
+                        );
                     }
                     else
                     {
-                        Console.WriteLine($"[Wizard] Channel {targetCh + 1} cleared assignment.");
+                        _activeWizard = null;
+                        _hudService?.CloseAssignmentWizard();
+                        UpdateAllLeds();
                     }
-
-                    _activeWizard = null;
-                    _hudService?.CloseAssignmentWizard();
-                    UpdateAllLeds();
-
-                    _hudService?.ShowChannelOverview(
-                        targetCh,
-                        _audioEngine.Channels[targetCh],
-                        activeControl: "",
-                        isFaderDirty: _isFaderDirty[targetCh],
-                        isFaderMoving: _isFaderMoving[targetCh],
-                        isKnobDirty: _isKnobDirty[targetCh],
-                        isKnobMoving: _isKnobMoving[targetCh],
-                        lastFaderVol: _lastFaderVol,
-                        lastKnobVol: _lastKnobVol,
-                        dismissDelayMs: 3000
-                    );
                 }
                 return;
             }
@@ -933,19 +1085,87 @@ public class MidiHardwareService : IDisposable
 
     private void OnOperationButtonLongPress(int chIdx)
     {
-        Console.WriteLine($"[Wizard] Channel {chIdx + 1} Operation Button Long-Pressed (>=1000ms) -> Launching 3D Wheel Stem Assignment Wizard");
+        Console.WriteLine($"[Wizard] Channel {chIdx + 1} Operation Button Long-Pressed (>=1000ms) -> Launching 3D Wheel Channel Assignment Wizard");
 
         CancelActiveWizardsIfOtherControlTouched(chIdx, isTargetChannelControl: false);
 
-        _activeWizard = new StemAssignmentWizard(chIdx, _categories, _lastFaderVol[chIdx]);
+        var presets = _presetStorageService.GetAlphabetizedPresets();
+        _activeWizard = new StemAssignmentWizard(chIdx, _categories, presets, _lastFaderVol[chIdx]);
 
         UpdateAllLeds();
         _hudService?.ShowAssignmentWizard(_activeWizard);
     }
 
+    private void OnPresetNameSubmitted(string presetName)
+    {
+        if (!_isPresetSaveActive) return;
+
+        int firstChannelIdx = -1;
+        for (int c = 0; c < 8; c++)
+        {
+            if (_presetSelectedChannels[c]) { firstChannelIdx = c; break; }
+        }
+
+        if (firstChannelIdx < 0)
+        {
+            Console.WriteLine("[Preset Save Error] No channels selected.");
+            CancelPresetSave();
+            return;
+        }
+
+        var preset = new Preset
+        {
+            Name = presetName,
+            CreatedAt = DateTime.Now
+        };
+
+        for (int c = 0; c < 8; c++)
+        {
+            if (_presetSelectedChannels[c])
+            {
+                var ch = _audioEngine.Channels[c];
+                if (ch.LoadedStem != null)
+                {
+                    preset.ChannelSnapshots.Add(new ChannelSnapshot
+                    {
+                        RelativeChannelIndex = c - firstChannelIdx,
+                        CategoryName = ch.LoadedStem.CategoryName,
+                        StemName = ch.LoadedStem.Name,
+                        MasterVolume = ch.MasterVolume,
+                        TrackVolumes = (float[])ch.TrackVolumes.Clone(),
+                        IsMuted = ch.IsMuted
+                    });
+                }
+            }
+        }
+
+        _presetStorageService.SavePreset(preset);
+        Console.WriteLine($"[Preset Save Success] Saved Preset '[{preset.Name}]' with {preset.ChannelSnapshots.Count} channel(s)!");
+
+        _isPresetSaveActive = false;
+        _isPresetNamingStep = false;
+        _hudService?.ClosePresetSaveWindow();
+        UpdateAllLeds();
+    }
+
+    private void CancelPresetSave()
+    {
+        if (!_isPresetSaveActive) return;
+        Console.WriteLine("[Preset Save] Cancelled preset creation mode.");
+        _isPresetSaveActive = false;
+        _isPresetNamingStep = false;
+        _hudService?.ClosePresetSaveWindow();
+        UpdateAllLeds();
+    }
+
     private void OnFlashTimerTick(object? state)
     {
         _flashPhase = !_flashPhase;
+
+        if (_isPresetSaveActive)
+        {
+            SendRawLed(107, _flashPhase ? (_isPresetNamingStep ? LedGreenFull : LedAmberFull) : LedOff);
+        }
 
         if (_activeWizard != null)
         {
@@ -997,11 +1217,20 @@ public class MidiHardwareService : IDisposable
             SendRawLed(105, LedOff);
         }
 
-        SendRawLed(107, LedOff);
-        SendRawLed(108, LedOff);
-
-        // Keep Global Master MUTE Button LED (Note 106) ALWAYS LIT Solid Green!
+        // Global Master MUTE Button LED (Note 106): ALWAYS LIT Solid Green
         SendRawLed(106, LedGreenFull);
+
+        // Preset Save Button LED (Note 107): Flashing Amber (Channel Select) or Green (Naming), else OFF
+        if (_isPresetSaveActive)
+        {
+            SendRawLed(107, _flashPhase ? (_isPresetNamingStep ? LedGreenFull : LedAmberFull) : LedOff);
+        }
+        else
+        {
+            SendRawLed(107, LedOff);
+        }
+
+        SendRawLed(108, LedOff);
     }
 
     public void UpdateChannelLeds(int channelIndex)
@@ -1017,6 +1246,25 @@ public class MidiHardwareService : IDisposable
 
         byte muteButtonId = (byte)(channelIndex < 4 ? 41 + channelIndex : 57 + (channelIndex - 4));
         byte operButtonId = (byte)(channelIndex < 4 ? 73 + channelIndex : 89 + (channelIndex - 4));
+
+        // PRESET SAVE MODE: Operation Buttons light Green (Selected) or Amber (Unselected) for assigned channels!
+        if (_isPresetSaveActive)
+        {
+            if (ch.LoadedStem != null)
+            {
+                bool isSelected = _presetSelectedChannels[channelIndex];
+                SendRawLed(operButtonId, isSelected ? LedGreenFull : LedAmberFull);
+            }
+            else
+            {
+                SendRawLed(operButtonId, LedOff);
+            }
+            SendRawLed(muteButtonId, LedOff);
+            SendRawLed(topKnobId, LedOff);
+            SendRawLed(midKnobId, LedOff);
+            SendRawLed(botKnobId, LedOff);
+            return;
+        }
 
         if (_activeClearWizard != null && _activeClearWizard.TargetChannelIndex == channelIndex)
         {

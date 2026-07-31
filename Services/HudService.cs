@@ -19,6 +19,7 @@ public class HudService : IDisposable
     private StemAssignmentWindow? _assignmentWindow;
     private ChannelClearWindow? _clearWindow;
     private MonitorSelectionWindow? _monitorWindow;
+    private PresetSaveWindow? _presetSaveWindow;
 
     private readonly List<DisplayMonitorInfo> _monitors;
     private int _targetMonitorIndex = 0;
@@ -27,6 +28,9 @@ public class HudService : IDisposable
     private Timer? _dismissTimer;
     private Timer? _monitorDismissTimer;
     private readonly object _lock = new();
+
+    public event Action<string>? OnPresetSaveSubmitted;
+    public event Action? OnPresetSaveCancelled;
 
     public int MonitorCount => _monitors.Count;
     public int TargetMonitorIndex => _targetMonitorIndex;
@@ -55,6 +59,10 @@ public class HudService : IDisposable
                 _assignmentWindow = new StemAssignmentWindow();
                 _clearWindow = new ChannelClearWindow();
                 _monitorWindow = new MonitorSelectionWindow();
+                _presetSaveWindow = new PresetSaveWindow();
+
+                _presetSaveWindow.OnPresetSaveSubmitted += name => OnPresetSaveSubmitted?.Invoke(name);
+                _presetSaveWindow.OnPresetSaveCancelled += () => OnPresetSaveCancelled?.Invoke();
 
                 ApplyTargetMonitorToAllWindows();
 
@@ -93,6 +101,7 @@ public class HudService : IDisposable
         _hudWindow?.SetTargetMonitor(targetMon);
         _assignmentWindow?.SetTargetMonitor(targetMon);
         _clearWindow?.SetTargetMonitor(targetMon);
+        _presetSaveWindow?.SetTargetMonitor(targetMon);
     }
 
     public void SetTargetMonitorIndex(int index)
@@ -132,6 +141,7 @@ public class HudService : IDisposable
                     _hudWindow?.HideHud();
                     _assignmentWindow?.HideWindow();
                     _clearWindow?.HideWindow();
+                    _presetSaveWindow?.HideWindow();
 
                     ApplyTargetMonitorToAllWindows();
 
@@ -188,6 +198,7 @@ public class HudService : IDisposable
                     _monitorWindow?.HideWindow();
                     _assignmentWindow?.HideWindow();
                     _clearWindow?.HideWindow();
+                    _presetSaveWindow?.HideWindow();
 
                     _hudWindow.UpdateChannelOverview(
                         channelIndex,
@@ -236,6 +247,7 @@ public class HudService : IDisposable
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _clearWindow?.HideWindow();
+                    _presetSaveWindow?.HideWindow();
 
                     _assignmentWindow.UpdateWizard(wizard);
                     _assignmentWindow.ShowWindow();
@@ -288,6 +300,115 @@ public class HudService : IDisposable
         }));
     }
 
+    public void ShowPresetSaveWindow(IReadOnlyList<Channel> channels, bool[] selectedFlags)
+    {
+        if (_dispatcher == null || _presetSaveWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _dismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
+                    _monitorWindow?.HideWindow();
+                    _hudWindow?.HideHud();
+                    _assignmentWindow?.HideWindow();
+                    _clearWindow?.HideWindow();
+
+                    _presetSaveWindow.UpdateChannelSelection(channels, selectedFlags);
+                    _presetSaveWindow.ShowWindow();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Preset Save Error] Show failed: {ex.Message}");
+            }
+        }));
+    }
+
+    public void UpdatePresetSaveWindow(IReadOnlyList<Channel> channels, bool[] selectedFlags)
+    {
+        if (_dispatcher == null || _presetSaveWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _presetSaveWindow.UpdateChannelSelection(channels, selectedFlags);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Preset Save Error] Update failed: {ex.Message}");
+            }
+        }));
+    }
+
+    public void TransitionPresetSaveToNaming(string defaultName = "")
+    {
+        if (_dispatcher == null || _presetSaveWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _presetSaveWindow.TransitionToNamingStep(defaultName);
+                    _presetSaveWindow.ShowWindow();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Preset Save Error] Transition failed: {ex.Message}");
+            }
+        }));
+    }
+
+    public void SubmitPresetSaveName()
+    {
+        if (_dispatcher == null || _presetSaveWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _presetSaveWindow.SubmitPresetName();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Preset Save Error] Submit failed: {ex.Message}");
+            }
+        }));
+    }
+
+    public void ClosePresetSaveWindow()
+    {
+        if (_dispatcher == null || _presetSaveWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _presetSaveWindow.HideWindow();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Preset Save Error] Close failed: {ex.Message}");
+            }
+        }));
+    }
+
     public void ShowClearConfirmation(int channelIndex, Stem? stem)
     {
         if (_dispatcher == null || _clearWindow == null) return;
@@ -303,6 +424,7 @@ public class HudService : IDisposable
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _assignmentWindow?.HideWindow();
+                    _presetSaveWindow?.HideWindow();
 
                     _clearWindow.UpdateDisplay(channelIndex, stem);
                     _clearWindow.ShowWindow();
@@ -352,6 +474,8 @@ public class HudService : IDisposable
                 _clearWindow = null;
                 _monitorWindow?.Close();
                 _monitorWindow = null;
+                _presetSaveWindow?.Close();
+                _presetSaveWindow = null;
                 System.Windows.Application.Current?.Shutdown();
             }));
         }

@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using SoundBoard.Models;
 
 namespace SoundBoard.Services;
 
 /// <summary>
-/// Service for saving, loading, and listing JSON Preset files.
+/// Service for saving, loading, and listing JSON Preset files in `./presets/`.
 /// </summary>
 public class PresetStorageService
 {
@@ -64,7 +65,7 @@ public class PresetStorageService
             var preset = JsonSerializer.Deserialize<Preset>(json, JsonOptions);
             if (preset != null)
             {
-                Console.WriteLine($"[PresetStorageService] Loaded preset '{preset.Name}' ({preset.SavedChannels.Count} channels).");
+                Console.WriteLine($"[PresetStorageService] Loaded preset '{preset.Name}' ({preset.ChannelSnapshots.Count} channels).");
             }
             return preset;
         }
@@ -75,7 +76,7 @@ public class PresetStorageService
         }
     }
 
-    public List<Preset> GetAllPresets(string presetsDirectory = "./presets")
+    public List<Preset> GetAlphabetizedPresets(string presetsDirectory = "./presets")
     {
         var presets = new List<Preset>();
         try
@@ -103,15 +104,13 @@ public class PresetStorageService
                     Console.WriteLine($"[PresetStorageService Warning] Error reading preset file '{file}': {ex.Message}");
                 }
             }
-
-            Console.WriteLine($"[PresetStorageService] Found {presets.Count} presets in '{presetsDirectory}'.");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[PresetStorageService Error] Failed to list presets in '{presetsDirectory}': {ex.Message}");
         }
 
-        return presets;
+        return presets.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private static string SanitizeFileName(string name)

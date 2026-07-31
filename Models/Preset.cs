@@ -1,12 +1,14 @@
+using System;
 using System.Collections.Generic;
 
 namespace SoundBoard.Models;
 
 /// <summary>
-/// A named global snapshot of saved active channel states across the board.
+/// Named collection of channel snapshots persisted to disk.
 /// </summary>
 public class Preset
 {
     public string Name { get; set; } = string.Empty;
-    public List<ChannelSnapshot> SavedChannels { get; set; } = new();
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public List<ChannelSnapshot> ChannelSnapshots { get; set; } = new();
 }

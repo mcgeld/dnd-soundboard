@@ -5,7 +5,7 @@ namespace SoundBoard.Models;
 /// </summary>
 public class ChannelSnapshot
 {
-    public int ChannelIndex { get; set; }
+    public int RelativeChannelIndex { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public string StemName { get; set; } = string.Empty;
     public float MasterVolume { get; set; } = 1.0f;

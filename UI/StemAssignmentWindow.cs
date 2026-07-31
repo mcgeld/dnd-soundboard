@@ -14,7 +14,7 @@ using SoundBoard.Models;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// TopMost translucent WPF Modal Window hosting the 3D Wheel Stem Assignment Wizard with compact padding.
+/// TopMost translucent WPF Modal Window hosting the 3D Wheel Channel Assignment Wizard with support for Stem and Preset choices.
 /// </summary>
 public class StemAssignmentWindow : Window
 {
@@ -57,7 +57,6 @@ public class StemAssignmentWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.Manual;
 
-        // Center on primary screen
         double screenWidth = SystemParameters.PrimaryScreenWidth;
         double screenHeight = SystemParameters.PrimaryScreenHeight;
         Left = (screenWidth - 440) / 2;
@@ -66,8 +65,8 @@ public class StemAssignmentWindow : Window
         _containerBorder = new Border
         {
             Width = 440,
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)), // ~20% ultralight translucent glass tint
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0x47, 0x57)), // Glowing coral/red active wizard border
+            Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0x47, 0x57)),
             BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(16),
             Padding = new Thickness(20, 14, 20, 14),
@@ -97,7 +96,7 @@ public class StemAssignmentWindow : Window
         // Step Title
         _stepTitleText = new TextBlock
         {
-            Text = "Select Category",
+            Text = "Select Assignment Type",
             FontWeight = FontWeights.Bold,
             FontSize = 19,
             Foreground = Brushes.White,
@@ -145,7 +144,7 @@ public class StemAssignmentWindow : Window
             var windowHelper = new WindowInteropHelper(this);
             var accent = new AccentPolicy
             {
-                AccentState = 4, // ACCENT_ENABLE_ACRYLICBLURBEHIND
+                AccentState = 4,
                 GradientColor = (0x22 << 24) | 0x1A1012
             };
 
@@ -172,18 +171,30 @@ public class StemAssignmentWindow : Window
         _headerBadgeText.Text = $"CHANNEL {chNum} ASSIGNMENT";
         _subtitleText.Text = $"Move Slider {chNum} to rotate wheel | Oper: Confirm | Mute: Back/Cancel";
 
-        if (wizard.CurrentStep == AssignmentStep.CategorySelection)
+        if (wizard.CurrentStep == AssignmentStep.ModeChoice)
         {
-            _stepTitleText.Text = "Step 1 of 2: Select Category";
+            _stepTitleText.Text = "Select Assignment Type";
+            var options = new List<string> { "Stem", "Preset" };
+            _wheelPicker.RenderWheel(options, wizard.SelectedModeIndex);
+        }
+        else if (wizard.CurrentStep == AssignmentStep.CategorySelection)
+        {
+            _stepTitleText.Text = "Select Category";
             var categoryNames = wizard.Categories.Select(c => c.Name).ToList();
             _wheelPicker.RenderWheel(categoryNames, wizard.SelectedCategoryIndex);
         }
         else if (wizard.CurrentStep == AssignmentStep.StemSelection)
         {
             string catName = wizard.CurrentCategory?.Name ?? "Category";
-            _stepTitleText.Text = $"Step 2 of 2: Select Stem ({catName})";
+            _stepTitleText.Text = $"Select Stem ({catName})";
             var stemNames = wizard.CurrentStems.Select(s => s.Name).ToList();
             _wheelPicker.RenderWheel(stemNames, wizard.SelectedStemIndex);
+        }
+        else if (wizard.CurrentStep == AssignmentStep.PresetSelection)
+        {
+            _stepTitleText.Text = "Select Preset";
+            var presetNames = wizard.Presets.Select(p => p.Name).ToList();
+            _wheelPicker.RenderWheel(presetNames, wizard.SelectedPresetIndex);
         }
     }
 
