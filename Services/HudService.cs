@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Windows.Threading;
+using SoundBoard.Helpers;
 using SoundBoard.Models;
 using SoundBoard.UI;
 
@@ -17,12 +19,22 @@ public class HudService : IDisposable
     private StemAssignmentWindow? _assignmentWindow;
     private TrackVolumeOverlayWindow? _volumeWindow;
     private ChannelClearWindow? _clearWindow;
+    private MonitorSelectionWindow? _monitorWindow;
+
+    private readonly List<DisplayMonitorInfo> _monitors;
+    private int _targetMonitorIndex = 0;
+
     private Timer? _dismissTimer;
     private Timer? _volumeDismissTimer;
+    private Timer? _monitorDismissTimer;
     private readonly object _lock = new();
+
+    public int MonitorCount => _monitors.Count;
+    public int TargetMonitorIndex => _targetMonitorIndex;
 
     public HudService()
     {
+        _monitors = DisplayMonitorHelper.GetDisplayMonitors();
         InitializeUiCore();
     }
 
@@ -44,6 +56,9 @@ public class HudService : IDisposable
                 _assignmentWindow = new StemAssignmentWindow();
                 _volumeWindow = new TrackVolumeOverlayWindow();
                 _clearWindow = new ChannelClearWindow();
+                _monitorWindow = new MonitorSelectionWindow();
+
+                ApplyTargetMonitorToAllWindows();
 
                 readyEvent.Set();
                 app.Run();
@@ -63,7 +78,89 @@ public class HudService : IDisposable
         _uiThread.Start();
 
         readyEvent.WaitOne(3000);
-        Console.WriteLine("[HUD] TopMost Glassmorphism HUD Overlay Service initialized.");
+        Console.WriteLine($"[HUD] TopMost Glassmorphism HUD Overlay Service initialized ({_monitors.Count} monitor(s) detected).");
+    }
+
+    private void ApplyTargetMonitorToAllWindows()
+    {
+        if (_monitors.Count == 0) return;
+
+        if (_targetMonitorIndex < 0 || _targetMonitorIndex >= _monitors.Count)
+        {
+            _targetMonitorIndex = 0;
+        }
+
+        var targetMon = _monitors[_targetMonitorIndex];
+
+        _hudWindow?.SetTargetMonitor(targetMon);
+        _assignmentWindow?.SetTargetMonitor(targetMon);
+        _volumeWindow?.SetTargetMonitor(targetMon);
+        _clearWindow?.SetTargetMonitor(targetMon);
+    }
+
+    public void SetTargetMonitorIndex(int index)
+    {
+        if (_monitors.Count == 0) return;
+
+        _targetMonitorIndex = Math.Clamp(index, 0, _monitors.Count - 1);
+
+        _dispatcher?.BeginInvoke(new Action(() =>
+        {
+            lock (_lock)
+            {
+                ApplyTargetMonitorToAllWindows();
+            }
+        }));
+    }
+
+    public int CycleTargetMonitor()
+    {
+        if (_monitors.Count <= 1) return 0;
+
+        _targetMonitorIndex = (_targetMonitorIndex + 1) % _monitors.Count;
+
+        _dispatcher?.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _monitorDismissTimer?.Dispose();
+                    _dismissTimer?.Dispose();
+                    _volumeDismissTimer?.Dispose();
+
+                    _hudWindow?.HideHud();
+                    _assignmentWindow?.HideWindow();
+                    _volumeWindow?.HideOverlay();
+                    _clearWindow?.HideWindow();
+
+                    ApplyTargetMonitorToAllWindows();
+
+                    var mon = _monitors[_targetMonitorIndex];
+                    _monitorWindow?.UpdateDisplay(mon, _monitors.Count);
+                    _monitorWindow?.ShowWindow();
+
+                    Console.WriteLine($"[HUD] Target Monitor cycled to: Monitor {_targetMonitorIndex + 1} of {_monitors.Count} ({mon.Bounds.Width:F0}x{mon.Bounds.Height:F0} {mon.DeviceName})");
+
+                    _monitorDismissTimer = new Timer(_ =>
+                    {
+                        _dispatcher?.BeginInvoke(new Action(() =>
+                        {
+                            lock (_lock)
+                            {
+                                _monitorWindow?.HideWindow();
+                            }
+                        }));
+                    }, null, 2000, Timeout.Infinite);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Monitor Selection Error] {ex.Message}");
+            }
+        }));
+
+        return _targetMonitorIndex;
     }
 
     public void ShowChannelInfo(int channelIndex, Stem? stem)
@@ -77,6 +174,7 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _dismissTimer?.Dispose();
+                    _monitorWindow?.HideWindow();
                     _assignmentWindow?.HideWindow();
                     _volumeWindow?.HideOverlay();
                     _clearWindow?.HideWindow();
@@ -114,6 +212,7 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _volumeDismissTimer?.Dispose();
+                    _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _assignmentWindow?.HideWindow();
                     _clearWindow?.HideWindow();
@@ -153,6 +252,7 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _volumeDismissTimer?.Dispose();
+                    _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _assignmentWindow?.HideWindow();
                     _clearWindow?.HideWindow();
@@ -196,6 +296,7 @@ public class HudService : IDisposable
                 {
                     _dismissTimer?.Dispose();
                     _volumeDismissTimer?.Dispose();
+                    _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _volumeWindow?.HideOverlay();
                     _clearWindow?.HideWindow();
@@ -263,6 +364,7 @@ public class HudService : IDisposable
                 {
                     _dismissTimer?.Dispose();
                     _volumeDismissTimer?.Dispose();
+                    _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _volumeWindow?.HideOverlay();
                     _assignmentWindow?.HideWindow();
@@ -302,6 +404,7 @@ public class HudService : IDisposable
     {
         _dismissTimer?.Dispose();
         _volumeDismissTimer?.Dispose();
+        _monitorDismissTimer?.Dispose();
 
         if (_dispatcher != null)
         {
@@ -315,6 +418,8 @@ public class HudService : IDisposable
                 _volumeWindow = null;
                 _clearWindow?.Close();
                 _clearWindow = null;
+                _monitorWindow?.Close();
+                _monitorWindow = null;
                 System.Windows.Application.Current?.Shutdown();
             }));
         }

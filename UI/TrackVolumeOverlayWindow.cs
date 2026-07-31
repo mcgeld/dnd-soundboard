@@ -290,11 +290,32 @@ public class TrackVolumeOverlayWindow : Window
         _emptyColumn.Width = new GridLength(emptyWeight, GridUnitType.Star);
     }
 
+    private Helpers.DisplayMonitorInfo? _targetMonitor;
+
+    public void SetTargetMonitor(Helpers.DisplayMonitorInfo monitor)
+    {
+        _targetMonitor = monitor;
+        PositionOnMonitor();
+    }
+
+    private void PositionOnMonitor()
+    {
+        if (_targetMonitor != null)
+        {
+            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 420) / 2;
+            Top = _targetMonitor.Bounds.Top + 60;
+        }
+        else
+        {
+            double screenWidth = SystemParameters.PrimaryScreenWidth;
+            Left = (screenWidth - 420) / 2;
+            Top = 60;
+        }
+    }
+
     public void ShowOverlay()
     {
-        double screenWidth = SystemParameters.PrimaryScreenWidth;
-        Left = (screenWidth - 420) / 2;
-        Top = 60;
+        PositionOnMonitor();
 
         BeginAnimation(OpacityProperty, null);
 

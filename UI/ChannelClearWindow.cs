@@ -219,14 +219,35 @@ public class ChannelClearWindow : Window
         _stemTitleText.Text = stemName;
     }
 
+    private Helpers.DisplayMonitorInfo? _targetMonitor;
+
+    public void SetTargetMonitor(Helpers.DisplayMonitorInfo monitor)
+    {
+        _targetMonitor = monitor;
+        PositionOnMonitor();
+    }
+
+    private void PositionOnMonitor()
+    {
+        if (_targetMonitor != null)
+        {
+            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 440) / 2;
+            Top = _targetMonitor.Bounds.Top + (_targetMonitor.Bounds.Height - 220) / 2;
+        }
+        else
+        {
+            double screenWidth = SystemParameters.PrimaryScreenWidth;
+            double screenHeight = SystemParameters.PrimaryScreenHeight;
+            Left = (screenWidth - 440) / 2;
+            Top = (screenHeight - 220) / 2;
+        }
+    }
+
     public void ShowWindow()
     {
-        double screenWidth = SystemParameters.PrimaryScreenWidth;
-        double screenHeight = SystemParameters.PrimaryScreenHeight;
-        Left = (screenWidth - 440) / 2;
-        Top = (screenHeight - 220) / 2;
+        PositionOnMonitor();
 
-        Opacity = 0;
+        BeginAnimation(OpacityProperty, null);
         Topmost = true;
         Visibility = Visibility.Visible;
         Show();

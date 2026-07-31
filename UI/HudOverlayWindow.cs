@@ -277,13 +277,34 @@ public class HudOverlayWindow : Window
         }
     }
 
+    private Helpers.DisplayMonitorInfo? _targetMonitor;
+
+    public void SetTargetMonitor(Helpers.DisplayMonitorInfo monitor)
+    {
+        _targetMonitor = monitor;
+        PositionOnMonitor();
+    }
+
+    private void PositionOnMonitor()
+    {
+        if (_targetMonitor != null)
+        {
+            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 440) / 2;
+            Top = _targetMonitor.Bounds.Top + 60;
+        }
+        else
+        {
+            double screenWidth = SystemParameters.PrimaryScreenWidth;
+            Left = (screenWidth - 440) / 2;
+            Top = 60;
+        }
+    }
+
     public void ShowHud()
     {
-        double screenWidth = SystemParameters.PrimaryScreenWidth;
-        Left = (screenWidth - 440) / 2;
-        Top = 60;
+        PositionOnMonitor();
 
-        Opacity = 0;
+        BeginAnimation(OpacityProperty, null);
         Topmost = true;
         Visibility = Visibility.Visible;
         Show();

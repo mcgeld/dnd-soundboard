@@ -486,6 +486,26 @@ public class MidiHardwareService : IDisposable
 
     private void HandleNote(int note, bool isNoteOn)
     {
+        // DEVICE / TRACK SELECT ▲ BUTTON (Note 104) -> Cycle Target HUD Monitor Display
+        if (note == 104)
+        {
+            if (isNoteOn)
+            {
+                if (_hudService != null && _hudService.MonitorCount > 1)
+                {
+                    Console.WriteLine("[MIDI] Device Button (Note 104) Pressed -> Cycling Target HUD Monitor Display");
+                    CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
+                    int newMonIdx = _hudService.CycleTargetMonitor();
+                    SaveHardwareState();
+                }
+                else
+                {
+                    Console.WriteLine("[MIDI] Device Button (Note 104) Pressed -> Single monitor system, cycling skipped.");
+                }
+            }
+            return;
+        }
+
         // GLOBAL MASTER MUTE MACRO BUTTON (Note 106)
         if (note == 106)
         {
@@ -859,7 +879,16 @@ public class MidiHardwareService : IDisposable
             UpdateChannelLeds(i);
         }
 
-        SendRawLed(104, LedOff);
+        // Device Button (Note 104) LED: Lit Solid Green if multiple monitors exist, else OFF
+        if (_hudService != null && _hudService.MonitorCount > 1)
+        {
+            SendRawLed(104, LedGreenFull);
+        }
+        else
+        {
+            SendRawLed(104, LedOff);
+        }
+
         SendRawLed(105, LedOff);
         SendRawLed(107, LedOff);
         SendRawLed(108, LedOff);
@@ -1009,7 +1038,8 @@ public class MidiHardwareService : IDisposable
             var dto = new HardwareStateDto
             {
                 FaderVolumes = (float[])_lastFaderVol.Clone(),
-                KnobVolumes = _lastKnobVol.Select(arr => (float[])arr.Clone()).ToArray()
+                KnobVolumes = _lastKnobVol.Select(arr => (float[])arr.Clone()).ToArray(),
+                TargetMonitorIndex = _hudService?.TargetMonitorIndex ?? 0
             };
             string json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(StateFilePath, json);
@@ -1025,18 +1055,23 @@ public class MidiHardwareService : IDisposable
             {
                 string json = File.ReadAllText(StateFilePath);
                 var dto = JsonSerializer.Deserialize<HardwareStateDto>(json);
-                if (dto != null && dto.FaderVolumes != null && dto.FaderVolumes.Length == 8)
+                if (dto != null)
                 {
-                    for (int i = 0; i < 8; i++)
+                    if (dto.FaderVolumes != null && dto.FaderVolumes.Length == 8)
                     {
-                        _lastFaderVol[i] = dto.FaderVolumes[i];
-                        if (dto.KnobVolumes != null && dto.KnobVolumes.Length == 8 && dto.KnobVolumes[i].Length == 3)
+                        for (int i = 0; i < 8; i++)
                         {
-                            _lastKnobVol[i] = dto.KnobVolumes[i];
+                            _lastFaderVol[i] = dto.FaderVolumes[i];
+                            if (dto.KnobVolumes != null && dto.KnobVolumes.Length == 8 && dto.KnobVolumes[i].Length == 3)
+                            {
+                                _lastKnobVol[i] = dto.KnobVolumes[i];
+                            }
+                            _hasHardwarePosition[i] = true;
                         }
-                        _hasHardwarePosition[i] = true;
                     }
-                    Console.WriteLine("[MIDI State] Restored last known hardware control positions from cache file.");
+
+                    _hudService?.SetTargetMonitorIndex(dto.TargetMonitorIndex);
+                    Console.WriteLine($"[MIDI State] Restored last known hardware control positions and target monitor ({dto.TargetMonitorIndex + 1}).");
                 }
             }
         }
