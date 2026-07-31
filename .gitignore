@@ -1,0 +1,14 @@
+## Visual Studio / .NET build artifacts
+[Bb]in/
+[Oo]bj/
+.vs/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+
+## Local hardware cache (optional runtime state)
+hardware_state.json
+
+## Ensure audio directory is tracked!
+!audio/

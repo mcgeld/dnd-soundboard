@@ -1,0 +1,17 @@
+{
+  "Name": "Stormy Tavern Encounter",
+  "SavedChannels": [
+    {
+      "ChannelIndex": 0,
+      "CategoryName": "TabletopAudio",
+      "StemName": "backgrounds ogg",
+      "MasterVolume": 0.85,
+      "TrackVolumes": [
+        0.75,
+        0.5,
+        0.9
+      ],
+      "IsMuted": false
+    }
+  ]
+}
