@@ -614,10 +614,10 @@ public class MidiHardwareService : IDisposable
                     _isPresetSaveActive = true;
                     _isPresetNamingStep = false;
 
-                    // By default, select all channels that have loaded stems
+                    // Default: ALL channels unselected (false)
                     for (int c = 0; c < 8; c++)
                     {
-                        _presetSelectedChannels[c] = _audioEngine.Channels[c].LoadedStem != null;
+                        _presetSelectedChannels[c] = false;
                     }
 
                     UpdateAllLeds();
@@ -704,14 +704,17 @@ public class MidiHardwareService : IDisposable
             if (isNoteOn)
             {
                 // PRESET CREATION MODE: Toggle channel selection via Operation Buttons!
-                if (_isPresetSaveActive && !_isPresetNamingStep)
+                if (_isPresetSaveActive)
                 {
-                    if (_audioEngine.Channels[operChIdx].LoadedStem != null)
+                    if (isNoteOn && !_isPresetNamingStep)
                     {
-                        _presetSelectedChannels[operChIdx] = !_presetSelectedChannels[operChIdx];
-                        Console.WriteLine($"[Preset Save] Channel {operChIdx + 1} Selection Toggled -> {(_presetSelectedChannels[operChIdx] ? "INCLUDED (Green)" : "REMOVED (Amber)")}");
-                        UpdateAllLeds();
-                        _hudService?.UpdatePresetSaveWindow(_audioEngine.Channels, _presetSelectedChannels);
+                        if (_audioEngine.Channels[operChIdx].LoadedStem != null)
+                        {
+                            _presetSelectedChannels[operChIdx] = !_presetSelectedChannels[operChIdx];
+                            Console.WriteLine($"[Preset Save] Channel {operChIdx + 1} Selection Toggled -> {(_presetSelectedChannels[operChIdx] ? "INCLUDED (Green)" : "REMOVED (Amber)")}");
+                            UpdateAllLeds();
+                            _hudService?.UpdatePresetSaveWindow(_audioEngine.Channels, _presetSelectedChannels);
+                        }
                     }
                     return;
                 }
