@@ -29,23 +29,8 @@ class Program
         // Pass scanned audio categories to MIDI service for hardware Stem Assignment Wizard
         midiService.SetCategories(categories);
 
-        // 3. Statically load the first available stem containing audio tracks onto Channel 0
-        Stem? testStem = categories.SelectMany(c => c.Stems).FirstOrDefault(s => s.Tracks.Count > 0)
-            ?? categories.SelectMany(c => c.Stems).FirstOrDefault();
-
-        if (testStem != null)
-        {
-            Console.WriteLine($"[Setup] Statically loading Stem '[{testStem.Name}]' ({testStem.CategoryName}) onto Channel 0.");
-            audioEngine.LoadStemToChannel(0, testStem);
-        }
-        else
-        {
-            Console.WriteLine("[Setup Warning] No stems with tracks found in './audio/' to statically load.");
-        }
-
-        // 4. Connect to MIDI hardware and sync LEDs
+        // 3. Connect to MIDI hardware and sync LEDs
         midiService.Start("Launch Control");
-        midiService.SyncChannelHardwareVolume(0);
 
         // Display Active Mixer Matrix Status
         Console.WriteLine();
