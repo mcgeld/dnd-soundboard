@@ -14,7 +14,7 @@ using SoundBoard.Models;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay with dynamic Red (Muted) / Green (Active) glowing border theme.
+/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay with neutral background and Red (Muted) vs Green (Active) border & progress bar colors.
 /// </summary>
 public class HudOverlayWindow : Window
 {
@@ -183,10 +183,10 @@ public class HudOverlayWindow : Window
 
         _channelBadgeText.Text = $"CHANNEL {chNum}  ●  {stemName.ToUpper()}";
 
-        // Keep standard dark glass background for optimal readability in both states
+        // Keep standard dark glass background neutral for optimal readability
         _containerBorder.Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B));
 
-        // DYNAMIC MUTED (Vibrant Red Border & Glow) vs ACTIVE (Emerald Green Border & Glow)
+        // OUTER WINDOW BORDER & AMBIENT GLOW (Red when Muted | Emerald Green when Active)
         if (channel.IsMuted)
         {
             _containerBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
@@ -322,19 +322,23 @@ public class HudOverlayWindow : Window
         bool isActiveControl,
         bool isChannelMuted)
     {
-        Color accentColor;
-        if (isChannelMuted)
+        // 1. Progress Bar Fill Color: Red when Muted, Amber when Dirty, Indigo when Active
+        Color barFillColor;
+        if (isDirty)
         {
-            accentColor = Color.FromRgb(0xFF, 0x47, 0x57); // Red accent when muted
+            barFillColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // Amber
         }
-        else if (isDirty)
+        else if (isChannelMuted)
         {
-            accentColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // Amber
+            barFillColor = Color.FromRgb(0xFF, 0x47, 0x57); // Red for Muted
         }
         else
         {
-            accentColor = Color.FromRgb(0x81, 0x8C, 0xF8); // Indigo
+            barFillColor = Color.FromRgb(0x81, 0x8C, 0xF8); // Indigo for Master
         }
+
+        // 2. Neutral Row Accent & Selection Border
+        Color rowAccentColor = isDirty ? Color.FromRgb(0xF5, 0x9E, 0x0B) : Color.FromRgb(0x81, 0x8C, 0xF8);
 
         var outerBorder = new Border
         {
@@ -343,13 +347,12 @@ public class HudOverlayWindow : Window
             Padding = new Thickness(8, 8, 8, 8),
             Margin = new Thickness(0, 2, 10, 4),
             Background = isActiveControl
-                ? new SolidColorBrush(Color.FromArgb(0x44, accentColor.R, accentColor.G, accentColor.B))
+                ? new SolidColorBrush(Color.FromArgb(0x44, rowAccentColor.R, rowAccentColor.G, rowAccentColor.B))
                 : new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
             BorderBrush = isActiveControl
-                ? new SolidColorBrush(accentColor)
-                : new SolidColorBrush(Color.FromArgb(0x33, accentColor.R, accentColor.G, accentColor.B)),
-            BorderThickness = new Thickness(isActiveControl ? 1.5 : 1),
-            Opacity = isChannelMuted ? 0.6 : 1.0
+                ? new SolidColorBrush(rowAccentColor)
+                : new SolidColorBrush(Color.FromArgb(0x33, rowAccentColor.R, rowAccentColor.G, rowAccentColor.B)),
+            BorderThickness = new Thickness(isActiveControl ? 1.5 : 1)
         };
 
         var barGrid = new Grid();
@@ -362,7 +365,7 @@ public class HudOverlayWindow : Window
             Text = $"{hwPct}%",
             FontWeight = FontWeights.Bold,
             FontSize = 11,
-            Foreground = isChannelMuted ? new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)) : Brushes.White,
+            Foreground = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 6)
         };
@@ -393,7 +396,7 @@ public class HudOverlayWindow : Window
         var hwFillBar = new Border
         {
             CornerRadius = new CornerRadius(5),
-            Background = new SolidColorBrush(accentColor),
+            Background = new SolidColorBrush(barFillColor),
             VerticalAlignment = VerticalAlignment.Stretch
         };
         Grid.SetRow(hwFillBar, 1);
@@ -442,19 +445,23 @@ public class HudOverlayWindow : Window
         bool isActiveControl,
         bool isChannelMuted)
     {
-        Color accentColor;
-        if (isChannelMuted)
+        // 1. Progress Bar Fill Color: Red when Muted, Amber when Dirty, Emerald Green when Active
+        Color barFillColor;
+        if (isDirty)
         {
-            accentColor = Color.FromRgb(0xFF, 0x47, 0x57); // Red accent when muted
+            barFillColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // Amber
         }
-        else if (isDirty)
+        else if (isChannelMuted)
         {
-            accentColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // Amber
+            barFillColor = Color.FromRgb(0xFF, 0x47, 0x57); // Red for Muted
         }
         else
         {
-            accentColor = Color.FromRgb(0x34, 0xD3, 0x99); // Emerald
+            barFillColor = Color.FromRgb(0x34, 0xD3, 0x99); // Emerald for Track
         }
+
+        // 2. Neutral Row Accent & Selection Border
+        Color rowAccentColor = isDirty ? Color.FromRgb(0xF5, 0x9E, 0x0B) : Color.FromRgb(0x34, 0xD3, 0x99);
 
         var rowBorder = new Border
         {
@@ -462,13 +469,12 @@ public class HudOverlayWindow : Window
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 2, 0, 4),
             Background = isActiveControl
-                ? new SolidColorBrush(Color.FromArgb(0x44, accentColor.R, accentColor.G, accentColor.B))
+                ? new SolidColorBrush(Color.FromArgb(0x44, rowAccentColor.R, rowAccentColor.G, rowAccentColor.B))
                 : new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
             BorderBrush = isActiveControl
-                ? new SolidColorBrush(accentColor)
-                : new SolidColorBrush(Color.FromArgb(0x33, accentColor.R, accentColor.G, accentColor.B)),
-            BorderThickness = new Thickness(isActiveControl ? 1.5 : 1),
-            Opacity = isChannelMuted ? 0.6 : 1.0
+                ? new SolidColorBrush(rowAccentColor)
+                : new SolidColorBrush(Color.FromArgb(0x33, rowAccentColor.R, rowAccentColor.G, rowAccentColor.B)),
+            BorderThickness = new Thickness(isActiveControl ? 1.5 : 1)
         };
 
         var rowStack = new StackPanel();
@@ -485,7 +491,7 @@ public class HudOverlayWindow : Window
             Text = labelText.ToUpper(),
             FontWeight = FontWeights.Bold,
             FontSize = 10,
-            Foreground = new SolidColorBrush(accentColor),
+            Foreground = new SolidColorBrush(rowAccentColor),
             Margin = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -513,7 +519,7 @@ public class HudOverlayWindow : Window
             Text = pctString,
             FontWeight = FontWeights.Bold,
             FontSize = 11,
-            Foreground = isChannelMuted ? new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)) : Brushes.White,
+            Foreground = Brushes.White,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(pctBlock, 1);
@@ -550,7 +556,7 @@ public class HudOverlayWindow : Window
         {
             Height = 8,
             CornerRadius = new CornerRadius(4),
-            Background = new SolidColorBrush(accentColor),
+            Background = new SolidColorBrush(barFillColor),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         Grid.SetColumn(fillBar, 0);
