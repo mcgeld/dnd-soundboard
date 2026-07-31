@@ -493,9 +493,9 @@ public class MidiHardwareService : IDisposable
             {
                 if (_hudService != null && _hudService.MonitorCount > 1)
                 {
-                    Console.WriteLine("[MIDI] Device Button (Note 105) Pressed -> Cycling Target HUD Monitor Display");
+                    Console.WriteLine("[MIDI] Device Button (Note 105) Pressed -> Displaying/Cycling Target HUD Monitor Display");
                     CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
-                    int newMonIdx = _hudService.CycleTargetMonitor();
+                    int newMonIdx = _hudService.ShowOrCycleTargetMonitor();
                     SaveHardwareState();
                 }
                 else

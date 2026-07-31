@@ -23,6 +23,7 @@ public class HudService : IDisposable
 
     private readonly List<DisplayMonitorInfo> _monitors;
     private int _targetMonitorIndex = 0;
+    private bool _isMonitorWindowShowing = false;
 
     private Timer? _dismissTimer;
     private Timer? _volumeDismissTimer;
@@ -113,11 +114,15 @@ public class HudService : IDisposable
         }));
     }
 
-    public int CycleTargetMonitor()
+    public int ShowOrCycleTargetMonitor()
     {
-        if (_monitors.Count <= 1) return 0;
+        if (_monitors.Count == 0) return 0;
 
-        _targetMonitorIndex = (_targetMonitorIndex + 1) % _monitors.Count;
+        if (_isMonitorWindowShowing && _monitors.Count > 1)
+        {
+            // Cycle to next monitor if selection window is already open
+            _targetMonitorIndex = (_targetMonitorIndex + 1) % _monitors.Count;
+        }
 
         _dispatcher?.BeginInvoke(new Action(() =>
         {
@@ -125,6 +130,7 @@ public class HudService : IDisposable
             {
                 lock (_lock)
                 {
+                    _isMonitorWindowShowing = true;
                     _monitorDismissTimer?.Dispose();
                     _dismissTimer?.Dispose();
                     _volumeDismissTimer?.Dispose();
@@ -140,7 +146,7 @@ public class HudService : IDisposable
                     _monitorWindow?.UpdateDisplay(mon, _monitors.Count);
                     _monitorWindow?.ShowWindow();
 
-                    Console.WriteLine($"[HUD] Target Monitor cycled to: Monitor {_targetMonitorIndex + 1} of {_monitors.Count} ({mon.Bounds.Width:F0}x{mon.Bounds.Height:F0} {mon.DeviceName})");
+                    Console.WriteLine($"[HUD] Target Monitor info displayed for: Monitor {_targetMonitorIndex + 1} of {_monitors.Count} ({mon.Bounds.Width:F0}x{mon.Bounds.Height:F0} {mon.DeviceName})");
 
                     _monitorDismissTimer = new Timer(_ =>
                     {
@@ -148,6 +154,7 @@ public class HudService : IDisposable
                         {
                             lock (_lock)
                             {
+                                _isMonitorWindowShowing = false;
                                 _monitorWindow?.HideWindow();
                             }
                         }));
@@ -174,6 +181,7 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _dismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _assignmentWindow?.HideWindow();
                     _volumeWindow?.HideOverlay();
@@ -212,6 +220,7 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _volumeDismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _assignmentWindow?.HideWindow();
@@ -252,6 +261,7 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _volumeDismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _assignmentWindow?.HideWindow();
@@ -296,6 +306,7 @@ public class HudService : IDisposable
                 {
                     _dismissTimer?.Dispose();
                     _volumeDismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _volumeWindow?.HideOverlay();
@@ -364,6 +375,7 @@ public class HudService : IDisposable
                 {
                     _dismissTimer?.Dispose();
                     _volumeDismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
                     _volumeWindow?.HideOverlay();
