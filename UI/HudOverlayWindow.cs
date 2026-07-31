@@ -14,7 +14,7 @@ using SoundBoard.Models;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay displaying Vertical Master Fader with parallel label + Track Knobs stacked top-to-bottom on right.
+/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay displaying Vertical Master Fader + Track Knobs stacked top-to-bottom on right.
 /// </summary>
 public class HudOverlayWindow : Window
 {
@@ -62,7 +62,7 @@ public class HudOverlayWindow : Window
 
         _containerBorder = new Border
         {
-            Width = 480,
+            Width = 460,
             Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
             BorderThickness = new Thickness(1.5),
@@ -296,9 +296,10 @@ public class HudOverlayWindow : Window
 
         var outerBorder = new Border
         {
+            Width = 46,
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(8, 8, 8, 8),
-            Margin = new Thickness(0, 2, 12, 4),
+            Margin = new Thickness(0, 2, 10, 4),
             Background = isActiveControl
                 ? new SolidColorBrush(Color.FromArgb(0x44, accentColor.R, accentColor.G, accentColor.B))
                 : new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
@@ -308,27 +309,7 @@ public class HudOverlayWindow : Window
             BorderThickness = new Thickness(isActiveControl ? 1.5 : 1)
         };
 
-        // 2-Column Grid: Column 0 = Parallel Rotated "MASTER" Label | Column 1 = Vertical Bar + Top Pct Text
-        var masterGrid = new Grid();
-        masterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        masterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        // 1. PARALLEL ROTATED "MASTER" LABEL (Column 0)
-        var rotText = new TextBlock
-        {
-            Text = "MASTER",
-            FontWeight = FontWeights.ExtraBold,
-            FontSize = 10,
-            Foreground = new SolidColorBrush(accentColor),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(2, 0, 8, 0),
-            LayoutTransform = new RotateTransform(-90)
-        };
-        Grid.SetColumn(rotText, 0);
-        masterGrid.Children.Add(rotText);
-
-        // 2. VERTICAL BAR STACK (Column 1) - Stretches to 100% Height of Knob Stack!
+        // Streamlined Vertical Column (Top Pct Text + Full-Height Vertical Bar)
         var barGrid = new Grid();
         barGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // Top Pct Text
         barGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Full Height Vertical Bar
@@ -404,10 +385,7 @@ public class HudOverlayWindow : Window
         Grid.SetRow(progressContainer, 1);
         barGrid.Children.Add(progressContainer);
 
-        Grid.SetColumn(barGrid, 1);
-        masterGrid.Children.Add(barGrid);
-
-        outerBorder.Child = masterGrid;
+        outerBorder.Child = barGrid;
         return outerBorder;
     }
 
@@ -624,13 +602,13 @@ public class HudOverlayWindow : Window
     {
         if (_targetMonitor != null)
         {
-            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 480) / 2;
+            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 460) / 2;
             Top = _targetMonitor.Bounds.Top + 50;
         }
         else
         {
             double screenWidth = SystemParameters.PrimaryScreenWidth;
-            Left = (screenWidth - 480) / 2;
+            Left = (screenWidth - 460) / 2;
             Top = 50;
         }
     }
