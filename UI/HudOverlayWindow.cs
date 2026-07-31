@@ -14,7 +14,7 @@ using SoundBoard.Models;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay displaying Master Fader + all Track Knobs together.
+/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay displaying Vertical Master Fader on left + Track Knobs stacked top-to-bottom on right.
 /// </summary>
 public class HudOverlayWindow : Window
 {
@@ -62,12 +62,12 @@ public class HudOverlayWindow : Window
 
         _containerBorder = new Border
         {
-            Width = 460,
+            Width = 480,
             Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
             BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(20, 16, 20, 16),
+            Padding = new Thickness(18, 14, 18, 14),
             Effect = new DropShadowEffect
             {
                 Color = Colors.Black,
@@ -216,30 +216,38 @@ public class HudOverlayWindow : Window
             Margin = new Thickness(0, 10, 0, 10)
         });
 
-        // 2. MASTER FADER ROW
+        // 2. DENSE 2-COLUMN MIXER STRIP LAYOUT (Left: Vertical Master Fader | Right: Knob Rows 1..3 Top-to-Bottom)
+        var bodyGrid = new Grid();
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Left Vertical Master
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Right Knob Stack
+
+        // LEFT COLUMN: VERTICAL MASTER FADER
         float faderHwVal = (lastFaderVol != null && lastFaderVol.Length > channelIndex) ? lastFaderVol[channelIndex] : channel.MasterVolume;
         float? faderGhostVal = isFaderDirty ? channel.MasterVolume : null;
         bool isFaderActive = activeControl == "fader";
 
-        var faderRow = CreateVolumeRow(
-            labelText: "Master Fader",
-            subLabelText: $"Fader {chNum}",
-            titleText: "Master Volume",
+        var masterVerticalColumn = CreateVerticalMasterFader(
+            chNum,
             hardwareValue: isFaderDirty ? faderHwVal : channel.MasterVolume,
             audioGhostValue: faderGhostVal,
             isDirty: isFaderDirty,
             isMoving: isFaderMoving,
-            isActiveControl: isFaderActive,
-            isMasterRow: true
+            isActiveControl: isFaderActive
         );
-        _mainStackPanel.Children.Add(faderRow);
+        Grid.SetColumn(masterVerticalColumn, 0);
+        bodyGrid.Children.Add(masterVerticalColumn);
 
-        // 3. TRACK KNOB ROWS (Knob 3 Bottom, Knob 2 Middle, Knob 1 Top)
+        // RIGHT COLUMN: TRACK KNOB ROWS (Knob 1 Top, Knob 2 Middle, Knob 3 Bottom)
+        var knobStack = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+
         string[] knobLabels = new string[] { "Knob 3 (Bottom)", "Knob 2 (Middle)", "Knob 1 (Top)" };
-
         int trackCount = stem?.Tracks.Count ?? 0;
 
-        for (int t = 0; t < 3; t++)
+        // Render from Top to Bottom matching control board layout (t = 2 -> Top, t = 1 -> Mid, t = 0 -> Bot)
+        for (int t = 2; t >= 0; t--)
         {
             bool isKnobDirtyVal = (isKnobDirty != null && isKnobDirty.Length > t) ? isKnobDirty[t] : false;
             bool isKnobMovingVal = (isKnobMoving != null && isKnobMoving.Length > t) ? isKnobMoving[t] : false;
@@ -258,18 +266,146 @@ public class HudOverlayWindow : Window
                     audioGhostValue: knobGhostVal,
                     isDirty: isKnobDirtyVal,
                     isMoving: isKnobMovingVal,
-                    isActiveControl: isKnobActive,
-                    isMasterRow: false
+                    isActiveControl: isKnobActive
                 );
-                _mainStackPanel.Children.Add(trackRow);
+                knobStack.Children.Add(trackRow);
             }
             else
             {
                 // Unassigned / Empty Slot Row
                 var emptyRow = CreateEmptyRow(knobLabels[t]);
-                _mainStackPanel.Children.Add(emptyRow);
+                knobStack.Children.Add(emptyRow);
             }
         }
+
+        Grid.SetColumn(knobStack, 1);
+        bodyGrid.Children.Add(knobStack);
+
+        _mainStackPanel.Children.Add(bodyGrid);
+    }
+
+    private Border CreateVerticalMasterFader(
+        int channelNumber,
+        float hardwareValue,
+        float? audioGhostValue,
+        bool isDirty,
+        bool isMoving,
+        bool isActiveControl)
+    {
+        Color accentColor = isDirty ? Color.FromRgb(0xF5, 0x9E, 0x0B) : Color.FromRgb(0x81, 0x8C, 0xF8); // Amber or Indigo
+
+        var outerBorder = new Border
+        {
+            Width = 64,
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(6, 8, 6, 8),
+            Margin = new Thickness(0, 2, 12, 4),
+            Background = isActiveControl
+                ? new SolidColorBrush(Color.FromArgb(0x44, accentColor.R, accentColor.G, accentColor.B))
+                : new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = isActiveControl
+                ? new SolidColorBrush(accentColor)
+                : new SolidColorBrush(Color.FromArgb(0x33, accentColor.R, accentColor.G, accentColor.B)),
+            BorderThickness = new Thickness(isActiveControl ? 1.5 : 1)
+        };
+
+        var mainGrid = new Grid();
+        mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Vertical Progress Bar
+        mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                      // Bottom Text
+
+        // 1. VERTICAL DUAL PROGRESS BAR
+        var progressContainer = new Border
+        {
+            Width = 10,
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8),
+            ClipToBounds = true
+        };
+
+        var verticalDualGrid = new Grid();
+
+        // Layer 0: Primary Hardware Vertical Bar (Row 0 = Empty Top, Row 1 = Filled Bottom)
+        var hwGrid = new Grid();
+        float filledWeight = Math.Clamp(hardwareValue, 0.001f, 1.0f);
+        float emptyWeight = 1.0f - hardwareValue;
+
+        hwGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(emptyWeight, GridUnitType.Star) });
+        hwGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(filledWeight, GridUnitType.Star) });
+
+        var hwFillBar = new Border
+        {
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush(accentColor),
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        Grid.SetRow(hwFillBar, 1);
+        hwGrid.Children.Add(hwFillBar);
+        verticalDualGrid.Children.Add(hwGrid);
+
+        // Layer 1: Ghost Current Audio Vertical Bar (Renders ON TOP)
+        if (audioGhostValue.HasValue)
+        {
+            var ghostGrid = new Grid();
+            float ghostFilled = Math.Clamp(audioGhostValue.Value, 0.001f, 1.0f);
+            float ghostEmpty = 1.0f - audioGhostValue.Value;
+
+            ghostGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(ghostEmpty, GridUnitType.Star) });
+            ghostGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(ghostFilled, GridUnitType.Star) });
+
+            var ghostFillBar = new Border
+            {
+                CornerRadius = new CornerRadius(5),
+                Background = new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF)),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(0, 2, 0, 0), // Top marker line for vertical bar
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            Grid.SetRow(ghostFillBar, 1);
+            ghostGrid.Children.Add(ghostFillBar);
+            verticalDualGrid.Children.Add(ghostGrid);
+        }
+
+        progressContainer.Child = verticalDualGrid;
+        Grid.SetRow(progressContainer, 0);
+        mainGrid.Children.Add(progressContainer);
+
+        // 2. BOTTOM TEXT BLOCK (Percentage + Vertical Rotated "MASTER" Label)
+        var bottomStack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+
+        int hwPct = (int)Math.Round(hardwareValue * 100);
+        var pctBlock = new TextBlock
+        {
+            Text = $"{hwPct}%",
+            FontWeight = FontWeights.Bold,
+            FontSize = 11,
+            Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
+        bottomStack.Children.Add(pctBlock);
+
+        var rotText = new TextBlock
+        {
+            Text = "MASTER",
+            FontWeight = FontWeights.ExtraBold,
+            FontSize = 9,
+            Foreground = new SolidColorBrush(accentColor),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            LayoutTransform = new RotateTransform(-90)
+        };
+        bottomStack.Children.Add(rotText);
+
+        Grid.SetRow(bottomStack, 1);
+        mainGrid.Children.Add(bottomStack);
+
+        outerBorder.Child = mainGrid;
+        return outerBorder;
     }
 
     private Border CreateVolumeRow(
@@ -280,23 +416,9 @@ public class HudOverlayWindow : Window
         float? audioGhostValue,
         bool isDirty,
         bool isMoving,
-        bool isActiveControl,
-        bool isMasterRow)
+        bool isActiveControl)
     {
-        // Border Accent Color
-        Color accentColor;
-        if (isDirty)
-        {
-            accentColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // Amber for Dirty Soft-Catch
-        }
-        else if (isMasterRow)
-        {
-            accentColor = Color.FromRgb(0x81, 0x8C, 0xF8); // Indigo for Master
-        }
-        else
-        {
-            accentColor = Color.FromRgb(0x34, 0xD3, 0x99); // Emerald for Track Dial
-        }
+        Color accentColor = isDirty ? Color.FromRgb(0xF5, 0x9E, 0x0B) : Color.FromRgb(0x34, 0xD3, 0x99); // Amber or Emerald
 
         var rowBorder = new Border
         {
@@ -499,13 +621,13 @@ public class HudOverlayWindow : Window
     {
         if (_targetMonitor != null)
         {
-            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 460) / 2;
+            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 480) / 2;
             Top = _targetMonitor.Bounds.Top + 50;
         }
         else
         {
             double screenWidth = SystemParameters.PrimaryScreenWidth;
-            Left = (screenWidth - 460) / 2;
+            Left = (screenWidth - 480) / 2;
             Top = 50;
         }
     }
