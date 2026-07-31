@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -6,18 +7,23 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using SoundBoard.Helpers;
 using SoundBoard.Models;
 
 namespace SoundBoard.UI;
 
 /// <summary>
-/// TopMost translucent WPF Confirmation Window for Clear Channel operations with visual green/red action pills.
+/// Glassmorphism TopMost Window displaying live multi-channel clear selection checklist.
 /// </summary>
 public class ChannelClearWindow : Window
 {
-    private readonly TextBlock _headerBadgeText;
-    private readonly TextBlock _stemTitleText;
+    private readonly TextBlock _titleText;
+    private readonly TextBlock _subtitleText;
+    private readonly StackPanel _channelListStack;
+    private readonly TextBlock _footerText;
     private readonly Border _containerBorder;
+
+    private DisplayMonitorInfo? _targetMonitor;
 
     #region Win32 Acrylic Blur API
     [StructLayout(LayoutKind.Sequential)]
@@ -52,128 +58,72 @@ public class ChannelClearWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.Manual;
 
-        // Center on primary screen
-        double screenWidth = SystemParameters.PrimaryScreenWidth;
-        double screenHeight = SystemParameters.PrimaryScreenHeight;
-        Left = (screenWidth - 440) / 2;
-        Top = (screenHeight - 220) / 2;
-
         _containerBorder = new Border
         {
-            Width = 440,
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)), // ~20% translucent dark glass
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0xEE, 0xFF, 0x47, 0x57)), // Glowing bright red border
-            BorderThickness = new Thickness(1.5),
+            Width = 480,
+            Background = new SolidColorBrush(Color.FromArgb(0xEE, 0x0F, 0x11, 0x1B)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)), // Red Accent
+            BorderThickness = new Thickness(2),
             CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(22, 16, 22, 16),
+            Padding = new Thickness(22, 18, 22, 18),
             Effect = new DropShadowEffect
             {
                 Color = Colors.Black,
                 Direction = 270,
-                ShadowDepth = 5,
-                BlurRadius = 20,
-                Opacity = 0.4
+                ShadowDepth = 4,
+                BlurRadius = 18,
+                Opacity = 0.35
             }
         };
 
         var mainStack = new StackPanel();
 
-        // Header Badge Row
-        _headerBadgeText = new TextBlock
+        // 1. Header (Title + Subtitle)
+        _titleText = new TextBlock
         {
-            Text = "CLEAR CHANNEL 1 CONFIRMATION",
-            FontWeight = FontWeights.Bold,
-            FontSize = 11,
+            Text = "CLEAR CHANNELS MODE",
+            FontWeight = FontWeights.ExtraBold,
+            FontSize = 16,
             Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)),
-            HorizontalAlignment = HorizontalAlignment.Center
+            Margin = new Thickness(0, 0, 0, 4)
         };
-        mainStack.Children.Add(_headerBadgeText);
+        mainStack.Children.Add(_titleText);
 
-        // Main Question Title
-        var titleText = new TextBlock
+        _subtitleText = new TextBlock
         {
-            Text = "Clear Channel & Unload Stem?",
-            FontWeight = FontWeights.Bold,
-            FontSize = 18,
-            Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 4)
+            Text = "Tap Operation buttons (1-8) to toggle channels to clear (Red = Clear).",
+            FontWeight = FontWeights.Medium,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)),
+            Margin = new Thickness(0, 0, 0, 12)
         };
-        mainStack.Children.Add(titleText);
+        mainStack.Children.Add(_subtitleText);
 
-        // Stem Info Title
-        _stemTitleText = new TextBlock
-        {
-            Text = "[Thunderstorm] (Weather)",
-            FontWeight = FontWeights.SemiBold,
-            FontSize = 14,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC7, 0xD2, 0xFE)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        mainStack.Children.Add(_stemTitleText);
-
-        // Divider Line
-        var divider = new Border
+        // Separator
+        mainStack.Children.Add(new Border
         {
             Height = 1,
             Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
             Margin = new Thickness(0, 0, 0, 12)
-        };
-        mainStack.Children.Add(divider);
+        });
 
-        // Visual Green & Red Action Button Pills (matching hardware LED colors)
-        var actionButtonsGrid = new Grid();
-        actionButtonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        actionButtonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // 2. Channel Selection Checklist Stack
+        _channelListStack = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        mainStack.Children.Add(_channelListStack);
 
-        // GREEN BUTTON (Operation Button -> Confirm Clear)
-        var greenPill = new Border
+        // 3. Footer Helper Text
+        _footerText = new TextBlock
         {
-            CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(Color.FromArgb(0x44, 0x34, 0xD3, 0x99)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
-            BorderThickness = new Thickness(1.5),
-            Padding = new Thickness(12, 6, 12, 6),
-            Margin = new Thickness(0, 0, 6, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-        var greenText = new TextBlock
-        {
-            Text = "● Confirm Clear",
-            FontWeight = FontWeights.Bold,
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        greenPill.Child = greenText;
-        Grid.SetColumn(greenPill, 0);
-
-        // RED BUTTON (Mute Button -> Cancel)
-        var redPill = new Border
-        {
-            CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0x47, 0x57)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)),
-            BorderThickness = new Thickness(1.5),
-            Padding = new Thickness(12, 6, 12, 6),
-            Margin = new Thickness(6, 0, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-        var redText = new TextBlock
-        {
-            Text = "● Cancel",
-            FontWeight = FontWeights.Bold,
-            FontSize = 12,
+            Text = "Press Mute to confirm clear  ●  Long-press Mute to CLEAR ALL",
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 11,
             Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)),
             HorizontalAlignment = HorizontalAlignment.Center
         };
-        redPill.Child = redText;
-        Grid.SetColumn(redPill, 1);
-
-        actionButtonsGrid.Children.Add(greenPill);
-        actionButtonsGrid.Children.Add(redPill);
-        mainStack.Children.Add(actionButtonsGrid);
+        mainStack.Children.Add(_footerText);
 
         _containerBorder.Child = mainStack;
         Content = _containerBorder;
@@ -211,17 +161,92 @@ public class ChannelClearWindow : Window
         catch { }
     }
 
-    public void UpdateDisplay(int channelIndex, Stem? stem)
+    public void UpdateClearSelection(IReadOnlyList<Channel> channels, bool[] selectedFlags)
     {
-        int chNum = channelIndex + 1;
-        _headerBadgeText.Text = $"CLEAR CHANNEL {chNum} CONFIRMATION";
-        string stemName = stem != null ? $"[{stem.Name}] ({stem.CategoryName})" : "Unassigned Channel";
-        _stemTitleText.Text = stemName;
+        _channelListStack.Children.Clear();
+
+        int selectedCount = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            var ch = channels[i];
+            if (ch.LoadedStem == null) continue;
+
+            bool isSelected = selectedFlags[i];
+            if (isSelected) selectedCount++;
+
+            var rowBorder = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 6, 10, 6),
+                Margin = new Thickness(0, 2, 0, 4),
+                Background = isSelected
+                    ? new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0x47, 0x57)) // Red tint if selected to clear
+                    : new SolidColorBrush(Color.FromArgb(0x44, 0xF5, 0x9E, 0x0B)), // Amber tint if unselected (keep)
+                BorderBrush = isSelected
+                    ? new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57))
+                    : new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)),
+                BorderThickness = new Thickness(1)
+            };
+
+            var rowGrid = new Grid();
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var checkBlock = new TextBlock
+            {
+                Text = isSelected ? "[ ✕ ]" : "[   ]",
+                FontWeight = FontWeights.ExtraBold,
+                FontSize = 12,
+                Foreground = isSelected ? new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)) : new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)),
+                Margin = new Thickness(0, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(checkBlock, 0);
+            rowGrid.Children.Add(checkBlock);
+
+            var infoBlock = new TextBlock
+            {
+                Text = $"Channel {i + 1}  ●  {ch.LoadedStem.Name} ({ch.LoadedStem.CategoryName})",
+                FontWeight = FontWeights.Bold,
+                FontSize = 13,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(infoBlock, 1);
+            rowGrid.Children.Add(infoBlock);
+
+            var statusBlock = new TextBlock
+            {
+                Text = isSelected ? "WILL CLEAR" : "KEEP",
+                FontWeight = FontWeights.ExtraBold,
+                FontSize = 10,
+                Foreground = isSelected ? new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)) : new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            Grid.SetColumn(statusBlock, 2);
+            rowGrid.Children.Add(statusBlock);
+
+            rowBorder.Child = rowGrid;
+            _channelListStack.Children.Add(rowBorder);
+        }
+
+        if (_channelListStack.Children.Count == 0)
+        {
+            _channelListStack.Children.Add(new TextBlock
+            {
+                Text = "No assigned channels available to clear.",
+                FontWeight = FontWeights.Medium,
+                FontSize = 12,
+                FontStyle = FontStyles.Italic,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+        }
     }
 
-    private Helpers.DisplayMonitorInfo? _targetMonitor;
-
-    public void SetTargetMonitor(Helpers.DisplayMonitorInfo monitor)
+    public void SetTargetMonitor(DisplayMonitorInfo monitor)
     {
         _targetMonitor = monitor;
         PositionOnMonitor();
@@ -231,15 +256,14 @@ public class ChannelClearWindow : Window
     {
         if (_targetMonitor != null)
         {
-            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 440) / 2;
-            Top = _targetMonitor.Bounds.Top + (_targetMonitor.Bounds.Height - 220) / 2;
+            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 480) / 2;
+            Top = _targetMonitor.Bounds.Top + 60;
         }
         else
         {
             double screenWidth = SystemParameters.PrimaryScreenWidth;
-            double screenHeight = SystemParameters.PrimaryScreenHeight;
-            Left = (screenWidth - 440) / 2;
-            Top = (screenHeight - 220) / 2;
+            Left = (screenWidth - 480) / 2;
+            Top = 60;
         }
     }
 
@@ -248,17 +272,10 @@ public class ChannelClearWindow : Window
         PositionOnMonitor();
 
         BeginAnimation(OpacityProperty, null);
+        Opacity = 1.0;
         Topmost = true;
         Visibility = Visibility.Visible;
         Show();
-
-        var anim = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(180)
-        };
-        BeginAnimation(OpacityProperty, anim);
     }
 
     public void HideWindow()
@@ -267,7 +284,7 @@ public class ChannelClearWindow : Window
         {
             From = Opacity,
             To = 0,
-            Duration = TimeSpan.FromMilliseconds(200)
+            Duration = TimeSpan.FromMilliseconds(180)
         };
         anim.Completed += (s, e) =>
         {

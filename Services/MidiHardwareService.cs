@@ -35,8 +35,9 @@ public class MidiHardwareService : IDisposable
     private readonly bool[] _isOperationHeld = new bool[8];
     private readonly bool[] _wasLongPressHandled = new bool[8];
 
-    // Interactive Clear Channel Wizard State
-    private ChannelClearWizard? _activeClearWizard;
+    // Interactive Multi-Channel Clear Mode State
+    private bool _isClearModeActive = false;
+    private readonly bool[] _clearSelectedChannels = new bool[8];
     private readonly Timer?[] _muteLongPressTimers = new Timer?[8];
     private readonly bool[] _isMuteHeld = new bool[8];
     private readonly bool[] _wasMuteLongPressHandled = new bool[8];
@@ -231,11 +232,9 @@ public class MidiHardwareService : IDisposable
             cancelledAny = true;
         }
 
-        if (_activeClearWizard != null && (_activeClearWizard.TargetChannelIndex != sourceChannelIndex || !isTargetChannelControl))
+        if (_isClearModeActive)
         {
-            Console.WriteLine($"[Clear Wizard] Control touched outside active clear channel -> Cancelling clear confirmation for Channel {_activeClearWizard.TargetChannelIndex + 1}");
-            _activeClearWizard = null;
-            _hudService?.CloseClearConfirmation();
+            CancelClearMode();
             cancelledAny = true;
         }
 
@@ -251,6 +250,15 @@ public class MidiHardwareService : IDisposable
         }
 
         return cancelledAny;
+    }
+
+    private void CancelClearMode()
+    {
+        if (!_isClearModeActive) return;
+        Console.WriteLine("[Clear Mode] Cancelled Clear Channel Mode.");
+        _isClearModeActive = false;
+        _hudService?.CloseClearModeWindow();
+        UpdateAllLeds();
     }
 
     private void HandleControlChange(int cc, int value)
@@ -279,7 +287,7 @@ public class MidiHardwareService : IDisposable
                 }
             }
 
-            if (_activeClearWizard != null || _isPresetSaveActive)
+            if (_isClearModeActive || _isPresetSaveActive)
             {
                 CancelActiveWizardsIfOtherControlTouched(chIdx, isTargetChannelControl: false);
             }
@@ -592,6 +600,12 @@ public class MidiHardwareService : IDisposable
         {
             if (isNoteOn)
             {
+                if (_isClearModeActive)
+                {
+                    OnMuteButtonShortPress(-1);
+                    return;
+                }
+
                 Console.WriteLine("[MIDI] Global Master MUTE Button (Note 106) Pressed -> Muting all assigned channels!");
                 CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
                 _audioEngine.MuteAllChannels();
@@ -701,6 +715,22 @@ public class MidiHardwareService : IDisposable
 
         if (operChIdx >= 0 && operChIdx < 8)
         {
+            // CLEAR CHANNEL MODE: Toggle clear selection via Operation Buttons!
+            if (_isClearModeActive)
+            {
+                if (isNoteOn)
+                {
+                    if (_audioEngine.Channels[operChIdx].LoadedStem != null)
+                    {
+                        _clearSelectedChannels[operChIdx] = !_clearSelectedChannels[operChIdx];
+                        Console.WriteLine($"[Clear Mode] Channel {operChIdx + 1} Clear Selection Toggled -> {(_clearSelectedChannels[operChIdx] ? "CLEAR (Red)" : "KEEP (Amber)")}");
+                        UpdateAllLeds();
+                        _hudService?.UpdateClearModeWindow(_audioEngine.Channels, _clearSelectedChannels);
+                    }
+                }
+                return;
+            }
+
             // PRESET CREATION MODE: Toggle channel selection via Operation Buttons!
             if (_isPresetSaveActive)
             {
@@ -839,7 +869,7 @@ public class MidiHardwareService : IDisposable
         }
 
         // SIDEBOARD MACRO BUTTONS (Notes 104, 108)
-        if (isNoteOn && (_activeWizard != null || _activeClearWizard != null))
+        if (isNoteOn && (_activeWizard != null || _isClearModeActive))
         {
             CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
         }
@@ -849,7 +879,7 @@ public class MidiHardwareService : IDisposable
     {
         if (_activeWizard != null)
         {
-            if (_activeWizard.TargetChannelIndex == chIdx)
+            if (chIdx >= 0 && _activeWizard.TargetChannelIndex == chIdx)
             {
                 bool cancelled = _activeWizard.GoBackOrCancel(_lastFaderVol[chIdx]);
                 if (cancelled)
@@ -872,20 +902,26 @@ public class MidiHardwareService : IDisposable
             }
         }
 
-        if (_activeClearWizard != null)
+        if (_isClearModeActive)
         {
-            if (_activeClearWizard.TargetChannelIndex == chIdx)
+            int clearedCount = 0;
+            for (int c = 0; c < 8; c++)
             {
-                Console.WriteLine($"[Clear Wizard] Cancelled clear channel operation for Channel {chIdx + 1}.");
-                _activeClearWizard = null;
-                _hudService?.CloseClearConfirmation();
-                UpdateAllLeds();
-                return;
+                if (_clearSelectedChannels[c] && _audioEngine.Channels[c].LoadedStem != null)
+                {
+                    Console.WriteLine($"[Clear Mode] Clearing Channel {c + 1} ({_audioEngine.Channels[c].LoadedStem?.Name}).");
+                    _audioEngine.LoadStemToChannel(c, null);
+                    SyncChannelHardwareVolume(c);
+                    clearedCount++;
+                }
+                _clearSelectedChannels[c] = false;
             }
-            else
-            {
-                CancelActiveWizardsIfOtherControlTouched(chIdx, isTargetChannelControl: false);
-            }
+
+            Console.WriteLine($"[Clear Mode] Confirmed clearing {clearedCount} channel(s).");
+            _isClearModeActive = false;
+            _hudService?.CloseClearModeWindow();
+            UpdateAllLeds();
+            return;
         }
 
         if (_isPresetSaveActive)
@@ -894,68 +930,66 @@ public class MidiHardwareService : IDisposable
             return;
         }
 
-        bool muted = _audioEngine.ToggleMute(chIdx);
-        var ch = _audioEngine.Channels[chIdx];
-        string stemName = ch.LoadedStem?.Name ?? "Unassigned";
-        Console.WriteLine($"[MIDI] Channel {chIdx} ({stemName}) Top Button (Mute) Short-Pressed -> Muted: {muted}");
-        UpdateChannelLeds(chIdx);
+        if (chIdx >= 0 && chIdx < 8)
+        {
+            bool muted = _audioEngine.ToggleMute(chIdx);
+            var ch = _audioEngine.Channels[chIdx];
+            string stemName = ch.LoadedStem?.Name ?? "Unassigned";
+            Console.WriteLine($"[MIDI] Channel {chIdx} ({stemName}) Top Button (Mute) Short-Pressed -> Muted: {muted}");
+            UpdateChannelLeds(chIdx);
+        }
     }
 
     private void OnMuteButtonLongPress(int chIdx)
     {
-        var ch = _audioEngine.Channels[chIdx];
-        if (ch.LoadedStem == null)
+        if (!_isClearModeActive)
         {
-            Console.WriteLine($"[Clear Wizard] Channel {chIdx + 1} is already unassigned.");
-            return;
+            bool hasAssigned = false;
+            for (int c = 0; c < 8; c++)
+            {
+                if (_audioEngine.Channels[c].LoadedStem != null) { hasAssigned = true; break; }
+            }
+
+            if (!hasAssigned)
+            {
+                Console.WriteLine("[Clear Mode Warning] No assigned channels on board to clear.");
+                return;
+            }
+
+            Console.WriteLine("[Clear Mode] Mute Button Long-Pressed (>=600ms) -> Entering Clear Channel Mode");
+            CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
+
+            _isClearModeActive = true;
+            for (int c = 0; c < 8; c++)
+            {
+                _clearSelectedChannels[c] = false;
+            }
+
+            UpdateAllLeds();
+            _hudService?.ShowClearModeWindow(_audioEngine.Channels, _clearSelectedChannels);
         }
+        else
+        {
+            // CLEAR ALL SHORTCUT!
+            Console.WriteLine("[Clear Mode] Mute Button Long-Pressed AGAIN -> Clearing ALL assigned channels!");
+            for (int c = 0; c < 8; c++)
+            {
+                if (_audioEngine.Channels[c].LoadedStem != null)
+                {
+                    _audioEngine.LoadStemToChannel(c, null);
+                    SyncChannelHardwareVolume(c);
+                }
+                _clearSelectedChannels[c] = false;
+            }
 
-        Console.WriteLine($"[Clear Wizard] Channel {chIdx + 1} Mute Button Long-Pressed (>=600ms) -> Launching Clear Channel Confirmation");
-
-        CancelActiveWizardsIfOtherControlTouched(chIdx, isTargetChannelControl: false);
-
-        _activeClearWizard = new ChannelClearWizard(chIdx, ch.LoadedStem);
-
-        UpdateAllLeds();
-        _hudService?.ShowClearConfirmation(chIdx, ch.LoadedStem);
+            _isClearModeActive = false;
+            _hudService?.CloseClearModeWindow();
+            UpdateAllLeds();
+        }
     }
 
     private void OnOperationButtonShortPress(int chIdx)
     {
-        if (_activeClearWizard != null)
-        {
-            if (_activeClearWizard.TargetChannelIndex == chIdx)
-            {
-                int targetCh = _activeClearWizard.TargetChannelIndex;
-                Console.WriteLine($"[Clear Wizard] Channel {targetCh + 1} confirmed clear! Unloading stem and going dark.");
-
-                _audioEngine.LoadStemToChannel(targetCh, null);
-                SyncChannelHardwareVolume(targetCh);
-
-                _activeClearWizard = null;
-                _hudService?.CloseClearConfirmation();
-                UpdateAllLeds();
-
-                _hudService?.ShowChannelOverview(
-                    targetCh,
-                    _audioEngine.Channels[targetCh],
-                    activeControl: "",
-                    isFaderDirty: _isFaderDirty[targetCh],
-                    isFaderMoving: _isFaderMoving[targetCh],
-                    isKnobDirty: _isKnobDirty[targetCh],
-                    isKnobMoving: _isKnobMoving[targetCh],
-                    lastFaderVol: _lastFaderVol,
-                    lastKnobVol: _lastKnobVol,
-                    dismissDelayMs: 3000
-                );
-                return;
-            }
-            else
-            {
-                CancelActiveWizardsIfOtherControlTouched(chIdx, isTargetChannelControl: false);
-            }
-        }
-
         if (_activeWizard != null)
         {
             if (_activeWizard.TargetChannelIndex == chIdx)
@@ -1181,25 +1215,7 @@ public class MidiHardwareService : IDisposable
             SendRawLed(muteButtonId, _flashPhase ? LedRedFull : LedOff);
         }
 
-        if (_activeClearWizard != null)
-        {
-            int activeCh = _activeClearWizard.TargetChannelIndex;
-            int baseId = activeCh * 16;
-            byte topKnobId = (byte)(13 + baseId);
-            byte midKnobId = (byte)(14 + baseId);
-            byte botKnobId = (byte)(15 + baseId);
-            byte muteButtonId = (byte)(activeCh < 4 ? 41 + activeCh : 57 + (activeCh - 4));
-            byte operButtonId = (byte)(activeCh < 4 ? 73 + activeCh : 89 + (activeCh - 4));
 
-            byte redVal = _flashPhase ? LedRedFull : LedOff;
-            byte greenVal = _flashPhase ? LedGreenFull : LedOff;
-
-            SendRawLed(operButtonId, greenVal);
-            SendRawLed(muteButtonId, redVal);
-            SendRawLed(topKnobId, redVal);
-            SendRawLed(midKnobId, redVal);
-            SendRawLed(botKnobId, redVal);
-        }
     }
 
     public void UpdateAllLeds()
@@ -1251,35 +1267,22 @@ public class MidiHardwareService : IDisposable
         byte muteButtonId = (byte)(channelIndex < 4 ? 41 + channelIndex : 57 + (channelIndex - 4));
         byte operButtonId = (byte)(channelIndex < 4 ? 73 + channelIndex : 89 + (channelIndex - 4));
 
-        // PRESET SAVE MODE: Operation Buttons light Green (Selected) or Amber (Unselected) for assigned channels!
-        if (_isPresetSaveActive)
+        // CLEAR CHANNEL MODE: Operation Buttons light Red (Selected to clear) or Amber (Unselected) for assigned channels!
+        if (_isClearModeActive)
         {
             if (ch.LoadedStem != null)
             {
-                bool isSelected = _presetSelectedChannels[channelIndex];
-                SendRawLed(operButtonId, isSelected ? LedGreenFull : LedAmberFull);
+                bool isSelected = _clearSelectedChannels[channelIndex];
+                SendRawLed(operButtonId, isSelected ? LedRedFull : LedAmberFull);
             }
             else
             {
                 SendRawLed(operButtonId, LedOff);
             }
-            SendRawLed(muteButtonId, LedOff);
+            SendRawLed(muteButtonId, _flashPhase ? LedRedFull : LedOff);
             SendRawLed(topKnobId, LedOff);
             SendRawLed(midKnobId, LedOff);
             SendRawLed(botKnobId, LedOff);
-            return;
-        }
-
-        if (_activeClearWizard != null && _activeClearWizard.TargetChannelIndex == channelIndex)
-        {
-            byte redVal = _flashPhase ? LedRedFull : LedOff;
-            byte greenVal = _flashPhase ? LedGreenFull : LedOff;
-
-            SendRawLed(operButtonId, greenVal);
-            SendRawLed(muteButtonId, redVal);
-            SendRawLed(topKnobId, redVal);
-            SendRawLed(midKnobId, redVal);
-            SendRawLed(botKnobId, redVal);
             return;
         }
 

@@ -1,0 +1,30 @@
+{
+  "Name": "Little Town",
+  "CreatedAt": "2026-07-31T17:09:43.7457057-06:00",
+  "ChannelSnapshots": [
+    {
+      "RelativeChannelIndex": 0,
+      "CategoryName": "Locale",
+      "StemName": "Town",
+      "MasterVolume": 1,
+      "TrackVolumes": [
+        0.6692913,
+        0.5590551,
+        0.62992126
+      ],
+      "IsMuted": false
+    },
+    {
+      "RelativeChannelIndex": 3,
+      "CategoryName": "Weather",
+      "StemName": "Rainy",
+      "MasterVolume": 0.8976378,
+      "TrackVolumes": [
+        0.5590551,
+        0.43307087,
+        1
+      ],
+      "IsMuted": false
+    }
+  ]
+}

@@ -409,7 +409,7 @@ public class HudService : IDisposable
         }));
     }
 
-    public void ShowClearConfirmation(int channelIndex, Stem? stem)
+    public void ShowClearModeWindow(IReadOnlyList<Channel> channels, bool[] selectedFlags)
     {
         if (_dispatcher == null || _clearWindow == null) return;
 
@@ -426,18 +426,38 @@ public class HudService : IDisposable
                     _assignmentWindow?.HideWindow();
                     _presetSaveWindow?.HideWindow();
 
-                    _clearWindow.UpdateDisplay(channelIndex, stem);
+                    _clearWindow.UpdateClearSelection(channels, selectedFlags);
                     _clearWindow.ShowWindow();
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[HUD Clear Error] Show failed: {ex.Message}");
+                Console.WriteLine($"[HUD Clear Mode Error] Show failed: {ex.Message}");
             }
         }));
     }
 
-    public void CloseClearConfirmation()
+    public void UpdateClearModeWindow(IReadOnlyList<Channel> channels, bool[] selectedFlags)
+    {
+        if (_dispatcher == null || _clearWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _clearWindow.UpdateClearSelection(channels, selectedFlags);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Clear Mode Error] Update failed: {ex.Message}");
+            }
+        }));
+    }
+
+    public void CloseClearModeWindow()
     {
         if (_dispatcher == null || _clearWindow == null) return;
 
@@ -452,7 +472,7 @@ public class HudService : IDisposable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[HUD Clear Error] Close failed: {ex.Message}");
+                Console.WriteLine($"[HUD Clear Mode Error] Close failed: {ex.Message}");
             }
         }));
     }

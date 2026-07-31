@@ -1,0 +1,30 @@
+{
+  "Name": "TEST 1",
+  "CreatedAt": "2026-07-31T17:02:21.8412255-06:00",
+  "ChannelSnapshots": [
+    {
+      "RelativeChannelIndex": 0,
+      "CategoryName": "Weather",
+      "StemName": "Rainy",
+      "MasterVolume": 0.8346457,
+      "TrackVolumes": [
+        1,
+        0.2913386,
+        0.96850395
+      ],
+      "IsMuted": false
+    },
+    {
+      "RelativeChannelIndex": 1,
+      "CategoryName": "Locale",
+      "StemName": "Campfire",
+      "MasterVolume": 0.43307087,
+      "TrackVolumes": [
+        0.8425197,
+        0.48818898,
+        1
+      ],
+      "IsMuted": false
+    }
+  ]
+}
