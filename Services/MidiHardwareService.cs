@@ -486,21 +486,21 @@ public class MidiHardwareService : IDisposable
 
     private void HandleNote(int note, bool isNoteOn)
     {
-        // DEVICE / TRACK SELECT ▲ BUTTON (Note 104) -> Cycle Target HUD Monitor Display
-        if (note == 104)
+        // DEVICE / TRACK SELECT ▼ BUTTON (Note 105) -> Cycle Target HUD Monitor Display
+        if (note == 105)
         {
             if (isNoteOn)
             {
                 if (_hudService != null && _hudService.MonitorCount > 1)
                 {
-                    Console.WriteLine("[MIDI] Device Button (Note 104) Pressed -> Cycling Target HUD Monitor Display");
+                    Console.WriteLine("[MIDI] Device Button (Note 105) Pressed -> Cycling Target HUD Monitor Display");
                     CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
                     int newMonIdx = _hudService.CycleTargetMonitor();
                     SaveHardwareState();
                 }
                 else
                 {
-                    Console.WriteLine("[MIDI] Device Button (Note 104) Pressed -> Single monitor system, cycling skipped.");
+                    Console.WriteLine("[MIDI] Device Button (Note 105) Pressed -> Single monitor system, cycling skipped.");
                 }
             }
             return;
@@ -879,17 +879,18 @@ public class MidiHardwareService : IDisposable
             UpdateChannelLeds(i);
         }
 
-        // Device Button (Note 104) LED: Lit Solid Green if multiple monitors exist, else OFF
+        SendRawLed(104, LedOff);
+
+        // Device Button (Note 105) LED: Lit Solid Green if multiple monitors exist, else OFF
         if (_hudService != null && _hudService.MonitorCount > 1)
         {
-            SendRawLed(104, LedGreenFull);
+            SendRawLed(105, LedGreenFull);
         }
         else
         {
-            SendRawLed(104, LedOff);
+            SendRawLed(105, LedOff);
         }
 
-        SendRawLed(105, LedOff);
         SendRawLed(107, LedOff);
         SendRawLed(108, LedOff);
 
