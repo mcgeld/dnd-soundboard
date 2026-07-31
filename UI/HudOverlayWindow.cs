@@ -14,7 +14,7 @@ using SoundBoard.Models;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay with dynamic Muted (Red) / Active (Green) glowing border theme.
+/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay with dynamic Red (Muted) / Green (Active) glowing border theme.
 /// </summary>
 public class HudOverlayWindow : Window
 {
@@ -183,12 +183,14 @@ public class HudOverlayWindow : Window
 
         _channelBadgeText.Text = $"CHANNEL {chNum}  ●  {stemName.ToUpper()}";
 
-        // DYNAMIC MUTED (Vibrant Red) vs ACTIVE (Emerald Green) WINDOW THEMING
+        // Keep standard dark glass background for optimal readability in both states
+        _containerBorder.Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B));
+
+        // DYNAMIC MUTED (Vibrant Red Border & Glow) vs ACTIVE (Emerald Green Border & Glow)
         if (channel.IsMuted)
         {
             _containerBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
             _containerBorder.BorderThickness = new Thickness(2.0);
-            _containerBorder.Background = new SolidColorBrush(Color.FromArgb(0x44, 0x24, 0x0F, 0x15));
             _containerBorder.Effect = new DropShadowEffect
             {
                 Color = Color.FromRgb(0xFF, 0x47, 0x57),
@@ -208,7 +210,6 @@ public class HudOverlayWindow : Window
         {
             _containerBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
             _containerBorder.BorderThickness = new Thickness(1.5);
-            _containerBorder.Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B));
             _containerBorder.Effect = new DropShadowEffect
             {
                 Color = Color.FromRgb(0x34, 0xD3, 0x99),
