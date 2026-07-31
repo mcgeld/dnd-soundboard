@@ -864,8 +864,8 @@ public class MidiHardwareService : IDisposable
         SendRawLed(107, LedOff);
         SendRawLed(108, LedOff);
 
-        // Keep Global Master MUTE Button LED (Note 106) ALWAYS LIT Solid Amber!
-        SendRawLed(106, LedAmberFull);
+        // Keep Global Master MUTE Button LED (Note 106) ALWAYS LIT Solid Green!
+        SendRawLed(106, LedGreenFull);
     }
 
     public void UpdateChannelLeds(int channelIndex)
