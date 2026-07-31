@@ -41,6 +41,9 @@ public class MidiHardwareService : IDisposable
     private readonly Timer?[] _muteLongPressTimers = new Timer?[8];
     private readonly bool[] _isMuteHeld = new bool[8];
     private readonly bool[] _wasMuteLongPressHandled = new bool[8];
+    private Timer? _note106LongPressTimer;
+    private bool _isNote106Held = false;
+    private bool _wasNote106LongPressHandled = false;
 
     // Interactive Preset Creation / Save State (Note 107)
     private bool _isPresetSaveActive = false;
@@ -600,13 +603,38 @@ public class MidiHardwareService : IDisposable
         {
             if (isNoteOn)
             {
+                _isNote106Held = true;
+                _wasNote106LongPressHandled = false;
+
+                _note106LongPressTimer?.Dispose();
+                _note106LongPressTimer = new Timer(_ =>
+                {
+                    if (_isNote106Held)
+                    {
+                        _wasNote106LongPressHandled = true;
+                        OnMuteButtonLongPress(-1);
+                    }
+                }, null, 600, Timeout.Infinite);
+            }
+            else
+            {
+                _isNote106Held = false;
+                _note106LongPressTimer?.Dispose();
+                _note106LongPressTimer = null;
+
+                if (_wasNote106LongPressHandled)
+                {
+                    _wasNote106LongPressHandled = false;
+                    return;
+                }
+
                 if (_isClearModeActive)
                 {
                     OnMuteButtonShortPress(-1);
                     return;
                 }
 
-                Console.WriteLine("[MIDI] Global Master MUTE Button (Note 106) Pressed -> Muting all assigned channels!");
+                Console.WriteLine("[MIDI] Global Master MUTE Button (Note 106) Short-Pressed -> Muting all assigned channels!");
                 CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
                 _audioEngine.MuteAllChannels();
                 UpdateAllLeds();
@@ -944,18 +972,6 @@ public class MidiHardwareService : IDisposable
     {
         if (!_isClearModeActive)
         {
-            bool hasAssigned = false;
-            for (int c = 0; c < 8; c++)
-            {
-                if (_audioEngine.Channels[c].LoadedStem != null) { hasAssigned = true; break; }
-            }
-
-            if (!hasAssigned)
-            {
-                Console.WriteLine("[Clear Mode Warning] No assigned channels on board to clear.");
-                return;
-            }
-
             Console.WriteLine("[Clear Mode] Mute Button Long-Pressed (>=600ms) -> Entering Clear Channel Mode");
             CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
 
