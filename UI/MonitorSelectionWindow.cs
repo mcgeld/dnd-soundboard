@@ -11,14 +11,15 @@ using SoundBoard.Helpers;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// TopMost Glassmorphism HUD overlay displayed when cycling target display monitors using the Launch Control XL Device button (Note 104).
+/// Full-screen TopMost visual highlight window displaying a glowing border frame and prominent hero monitor number badge when cycling target displays.
 /// </summary>
 public class MonitorSelectionWindow : Window
 {
+    private readonly TextBlock _numberBadgeText;
     private readonly TextBlock _headerTagText;
     private readonly TextBlock _titleText;
     private readonly TextBlock _detailText;
-    private readonly Border _containerBorder;
+    private readonly Border _screenBorder;
 
     #region Win32 Acrylic Blur API
     [StructLayout(LayoutKind.Sequential)]
@@ -50,63 +51,107 @@ public class MonitorSelectionWindow : Window
         Topmost = true;
         ShowInTaskbar = false;
         Focusable = false;
-        SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.Manual;
 
-        _containerBorder = new Border
+        // Full-screen outer border framing the entire monitor
+        _screenBorder = new Border
         {
-            Width = 440,
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)), // Emerald accent
-            BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(20, 14, 20, 14),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Background = new SolidColorBrush(Color.FromArgb(0x18, 0x0F, 0x11, 0x1B)), // Subtle 10% dark glass tint
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),       // Glowing Emerald border
+            BorderThickness = new Thickness(6)
+        };
+
+        // Center Hero Card Container
+        var centerGrid = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var heroCard = new Border
+        {
+            Width = 480,
+            Background = new SolidColorBrush(Color.FromArgb(0xEE, 0x0F, 0x11, 0x1B)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0xAA, 0x34, 0xD3, 0x99)),
+            BorderThickness = new Thickness(2),
+            CornerRadius = new CornerRadius(20),
+            Padding = new Thickness(24, 20, 24, 20),
             Effect = new DropShadowEffect
             {
-                Color = Colors.Black,
+                Color = Color.FromRgb(0x34, 0xD3, 0x99),
                 Direction = 270,
-                ShadowDepth = 4,
-                BlurRadius = 16,
-                Opacity = 0.3
+                ShadowDepth = 0,
+                BlurRadius = 32,
+                Opacity = 0.5
             }
         };
 
-        var mainStack = new StackPanel();
+        var cardStack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+
+        // Big Giant Monitor Number Badge
+        _numberBadgeText = new TextBlock
+        {
+            Text = "1",
+            FontWeight = FontWeights.ExtraBold,
+            FontSize = 76,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, -8),
+            Effect = new DropShadowEffect
+            {
+                Color = Color.FromRgb(0x34, 0xD3, 0x99),
+                BlurRadius = 16,
+                ShadowDepth = 0,
+                Opacity = 0.8
+            }
+        };
+        cardStack.Children.Add(_numberBadgeText);
 
         // Header Tag
         _headerTagText = new TextBlock
         {
-            Text = "MONITOR 1 OF 3  ●  DEVICE SELECTION",
+            Text = "MONITOR 1 OF 3  ●  PRIMARY",
             FontWeight = FontWeights.Bold,
-            FontSize = 11,
+            FontSize = 12,
             Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
+            HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 4)
         };
-        mainStack.Children.Add(_headerTagText);
+        cardStack.Children.Add(_headerTagText);
 
         // Title
         _titleText = new TextBlock
         {
-            Text = "HUD Target Display Selected",
+            Text = "HUD TARGET DISPLAY SELECTED",
             FontWeight = FontWeights.Bold,
-            FontSize = 17,
+            FontSize = 18,
             Foreground = Brushes.White,
-            Margin = new Thickness(0, 0, 0, 4)
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 6)
         };
-        mainStack.Children.Add(_titleText);
+        cardStack.Children.Add(_titleText);
 
         // Detail / Resolution
         _detailText = new TextBlock
         {
             Text = "1920 × 1080 (Primary Monitor)",
             FontWeight = FontWeights.Medium,
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF))
+            FontSize = 13,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)),
+            HorizontalAlignment = HorizontalAlignment.Center
         };
-        mainStack.Children.Add(_detailText);
+        cardStack.Children.Add(_detailText);
 
-        _containerBorder.Child = mainStack;
-        Content = _containerBorder;
+        heroCard.Child = cardStack;
+        centerGrid.Children.Add(heroCard);
+        _screenBorder.Child = centerGrid;
+
+        Content = _screenBorder;
 
         Visibility = Visibility.Hidden;
 
@@ -144,12 +189,15 @@ public class MonitorSelectionWindow : Window
     public void UpdateDisplay(DisplayMonitorInfo monitor, int totalMonitors)
     {
         string primaryTag = monitor.IsPrimary ? "PRIMARY" : "SECONDARY";
+        _numberBadgeText.Text = $"{monitor.Index + 1}";
         _headerTagText.Text = $"MONITOR {monitor.Index + 1} OF {totalMonitors}  ●  {primaryTag}";
-        _titleText.Text = $"HUD Target Display Selected";
         _detailText.Text = $"{monitor.Bounds.Width:F0} × {monitor.Bounds.Height:F0} ({monitor.DeviceName})";
 
-        Left = monitor.Bounds.Left + (monitor.Bounds.Width - 440) / 2;
-        Top = monitor.Bounds.Top + 60;
+        // Span full monitor bounds
+        Left = monitor.Bounds.Left;
+        Top = monitor.Bounds.Top;
+        Width = monitor.Bounds.Width;
+        Height = monitor.Bounds.Height;
     }
 
     public void ShowWindow()
@@ -168,7 +216,7 @@ public class MonitorSelectionWindow : Window
         {
             From = Opacity,
             To = 0,
-            Duration = TimeSpan.FromMilliseconds(180)
+            Duration = TimeSpan.FromMilliseconds(300)
         };
         anim.Completed += (s, e) =>
         {
