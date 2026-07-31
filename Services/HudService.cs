@@ -17,7 +17,6 @@ public class HudService : IDisposable
     private Dispatcher? _dispatcher;
     private HudOverlayWindow? _hudWindow;
     private StemAssignmentWindow? _assignmentWindow;
-    private TrackVolumeOverlayWindow? _volumeWindow;
     private ChannelClearWindow? _clearWindow;
     private MonitorSelectionWindow? _monitorWindow;
 
@@ -26,7 +25,6 @@ public class HudService : IDisposable
     private bool _isMonitorWindowShowing = false;
 
     private Timer? _dismissTimer;
-    private Timer? _volumeDismissTimer;
     private Timer? _monitorDismissTimer;
     private readonly object _lock = new();
 
@@ -55,7 +53,6 @@ public class HudService : IDisposable
                 _dispatcher = Dispatcher.CurrentDispatcher;
                 _hudWindow = new HudOverlayWindow();
                 _assignmentWindow = new StemAssignmentWindow();
-                _volumeWindow = new TrackVolumeOverlayWindow();
                 _clearWindow = new ChannelClearWindow();
                 _monitorWindow = new MonitorSelectionWindow();
 
@@ -95,7 +92,6 @@ public class HudService : IDisposable
 
         _hudWindow?.SetTargetMonitor(targetMon);
         _assignmentWindow?.SetTargetMonitor(targetMon);
-        _volumeWindow?.SetTargetMonitor(targetMon);
         _clearWindow?.SetTargetMonitor(targetMon);
     }
 
@@ -120,7 +116,6 @@ public class HudService : IDisposable
 
         if (_isMonitorWindowShowing && _monitors.Count > 1)
         {
-            // Cycle to next monitor if selection window is already open
             _targetMonitorIndex = (_targetMonitorIndex + 1) % _monitors.Count;
         }
 
@@ -133,11 +128,9 @@ public class HudService : IDisposable
                     _isMonitorWindowShowing = true;
                     _monitorDismissTimer?.Dispose();
                     _dismissTimer?.Dispose();
-                    _volumeDismissTimer?.Dispose();
 
                     _hudWindow?.HideHud();
                     _assignmentWindow?.HideWindow();
-                    _volumeWindow?.HideOverlay();
                     _clearWindow?.HideWindow();
 
                     ApplyTargetMonitorToAllWindows();
@@ -170,7 +163,17 @@ public class HudService : IDisposable
         return _targetMonitorIndex;
     }
 
-    public void ShowChannelInfo(int channelIndex, Stem? stem)
+    public void ShowChannelOverview(
+        int channelIndex,
+        Channel channel,
+        string activeControl = "",
+        bool isFaderDirty = false,
+        bool isFaderMoving = false,
+        bool[]? isKnobDirty = null,
+        bool[]? isKnobMoving = null,
+        float[]? lastFaderVol = null,
+        float[][]? lastKnobVol = null,
+        int dismissDelayMs = 1000)
     {
         if (_dispatcher == null || _hudWindow == null) return;
 
@@ -184,10 +187,19 @@ public class HudService : IDisposable
                     _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _assignmentWindow?.HideWindow();
-                    _volumeWindow?.HideOverlay();
                     _clearWindow?.HideWindow();
 
-                    _hudWindow.UpdateDisplay(channelIndex, stem);
+                    _hudWindow.UpdateChannelOverview(
+                        channelIndex,
+                        channel,
+                        activeControl,
+                        isFaderDirty,
+                        isFaderMoving,
+                        isKnobDirty,
+                        isKnobMoving,
+                        lastFaderVol,
+                        lastKnobVol
+                    );
                     _hudWindow.ShowHud();
 
                     _dismissTimer = new Timer(_ =>
@@ -199,97 +211,12 @@ public class HudService : IDisposable
                                 _hudWindow?.HideHud();
                             }
                         }));
-                    }, null, 3000, Timeout.Infinite);
+                    }, null, dismissDelayMs, Timeout.Infinite);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[HUD Error] Display update failed: {ex.Message}");
-            }
-        }));
-    }
-
-    public void ShowTrackVolumeInfo(int channelIndex, string stemName, string trackTitle, string knobLabel, float hardwareVolumePercent, float? audioVolumePercent = null)
-    {
-        if (_dispatcher == null || _volumeWindow == null) return;
-
-        _dispatcher.BeginInvoke(new Action(() =>
-        {
-            try
-            {
-                lock (_lock)
-                {
-                    _volumeDismissTimer?.Dispose();
-                    _isMonitorWindowShowing = false;
-                    _monitorWindow?.HideWindow();
-                    _hudWindow?.HideHud();
-                    _assignmentWindow?.HideWindow();
-                    _clearWindow?.HideWindow();
-
-                    string tagText = $"CHANNEL {channelIndex + 1}  ●  {stemName}";
-
-                    _volumeWindow.UpdateVolumeDisplay(tagText, trackTitle, knobLabel, hardwareVolumePercent, isMasterVolume: false, audioVolumePercent: audioVolumePercent);
-                    _volumeWindow.ShowOverlay();
-
-                    _volumeDismissTimer = new Timer(_ =>
-                    {
-                        _dispatcher?.BeginInvoke(new Action(() =>
-                        {
-                            lock (_lock)
-                            {
-                                _volumeWindow?.HideOverlay();
-                            }
-                        }));
-                    }, null, 1000, Timeout.Infinite);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[HUD Track Volume Error] Show failed: {ex.Message}");
-            }
-        }));
-    }
-
-    public void ShowMasterVolumeInfo(int channelIndex, string stemName, float hardwareVolumePercent, float? audioVolumePercent = null)
-    {
-        if (_dispatcher == null || _volumeWindow == null) return;
-
-        _dispatcher.BeginInvoke(new Action(() =>
-        {
-            try
-            {
-                lock (_lock)
-                {
-                    _volumeDismissTimer?.Dispose();
-                    _isMonitorWindowShowing = false;
-                    _monitorWindow?.HideWindow();
-                    _hudWindow?.HideHud();
-                    _assignmentWindow?.HideWindow();
-                    _clearWindow?.HideWindow();
-
-                    string stemTitle = string.IsNullOrWhiteSpace(stemName) ? "Unassigned" : stemName;
-                    string tagText = $"CHANNEL {channelIndex + 1}  ●  {stemTitle}";
-                    string titleText = "Master Volume";
-                    string labelText = $"Fader {channelIndex + 1}";
-
-                    _volumeWindow.UpdateVolumeDisplay(tagText, titleText, labelText, hardwareVolumePercent, isMasterVolume: true, audioVolumePercent: audioVolumePercent);
-                    _volumeWindow.ShowOverlay();
-
-                    _volumeDismissTimer = new Timer(_ =>
-                    {
-                        _dispatcher?.BeginInvoke(new Action(() =>
-                        {
-                            lock (_lock)
-                            {
-                                _volumeWindow?.HideOverlay();
-                            }
-                        }));
-                    }, null, 1000, Timeout.Infinite);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[HUD Master Volume Error] Show failed: {ex.Message}");
+                Console.WriteLine($"[HUD Overview Error] Display update failed: {ex.Message}");
             }
         }));
     }
@@ -305,11 +232,9 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _dismissTimer?.Dispose();
-                    _volumeDismissTimer?.Dispose();
                     _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
-                    _volumeWindow?.HideOverlay();
                     _clearWindow?.HideWindow();
 
                     _assignmentWindow.UpdateWizard(wizard);
@@ -374,11 +299,9 @@ public class HudService : IDisposable
                 lock (_lock)
                 {
                     _dismissTimer?.Dispose();
-                    _volumeDismissTimer?.Dispose();
                     _isMonitorWindowShowing = false;
                     _monitorWindow?.HideWindow();
                     _hudWindow?.HideHud();
-                    _volumeWindow?.HideOverlay();
                     _assignmentWindow?.HideWindow();
 
                     _clearWindow.UpdateDisplay(channelIndex, stem);
@@ -415,7 +338,6 @@ public class HudService : IDisposable
     public void Dispose()
     {
         _dismissTimer?.Dispose();
-        _volumeDismissTimer?.Dispose();
         _monitorDismissTimer?.Dispose();
 
         if (_dispatcher != null)
@@ -426,8 +348,6 @@ public class HudService : IDisposable
                 _hudWindow = null;
                 _assignmentWindow?.Close();
                 _assignmentWindow = null;
-                _volumeWindow?.Close();
-                _volumeWindow = null;
                 _clearWindow?.Close();
                 _clearWindow = null;
                 _monitorWindow?.Close();

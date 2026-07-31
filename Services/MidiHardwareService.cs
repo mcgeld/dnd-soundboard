@@ -266,9 +266,8 @@ public class MidiHardwareService : IDisposable
             }
 
             var ch = _audioEngine.Channels[chIdx];
-            string stemName = ch.LoadedStem?.Name ?? "Unassigned";
 
-            // Dirty Fader Soft-Catch Handling (Dual Progress Bars in HUD)
+            // Dirty Fader Soft-Catch Handling (Show Unified Channel Overview HUD)
             if (_isFaderDirty[chIdx])
             {
                 if (!_isFaderMoving[chIdx])
@@ -277,8 +276,18 @@ public class MidiHardwareService : IDisposable
                     UpdateChannelLeds(chIdx);
                 }
 
-                // Show physical fader pos AND current audio volume level
-                _hudService?.ShowMasterVolumeInfo(chIdx, stemName, floatVal, audioVolumePercent: ch.MasterVolume);
+                _hudService?.ShowChannelOverview(
+                    chIdx,
+                    ch,
+                    activeControl: "fader",
+                    isFaderDirty: _isFaderDirty[chIdx],
+                    isFaderMoving: _isFaderMoving[chIdx],
+                    isKnobDirty: _isKnobDirty[chIdx],
+                    isKnobMoving: _isKnobMoving[chIdx],
+                    lastFaderVol: _lastFaderVol,
+                    lastKnobVol: _lastKnobVol,
+                    dismissDelayMs: 1000
+                );
 
                 _faderMotionPauseTimers[chIdx]?.Dispose();
                 _faderMotionPauseTimers[chIdx] = new Timer(_ =>
@@ -302,9 +311,20 @@ public class MidiHardwareService : IDisposable
             }
 
             _audioEngine.SetMasterVolume(chIdx, floatVal, immediate: true);
-            _hudService?.ShowMasterVolumeInfo(chIdx, stemName, floatVal);
+            _hudService?.ShowChannelOverview(
+                chIdx,
+                ch,
+                activeControl: "fader",
+                isFaderDirty: _isFaderDirty[chIdx],
+                isFaderMoving: _isFaderMoving[chIdx],
+                isKnobDirty: _isKnobDirty[chIdx],
+                isKnobMoving: _isKnobMoving[chIdx],
+                lastFaderVol: _lastFaderVol,
+                lastKnobVol: _lastKnobVol,
+                dismissDelayMs: 1000
+            );
 
-            Console.WriteLine($"[MIDI] Channel {chIdx} ({stemName}) Fader -> Master Vol {ch.MasterVolume:F2}");
+            Console.WriteLine($"[MIDI] Channel {chIdx} ({ch.LoadedStem?.Name ?? "Unassigned"}) Fader -> Master Vol {ch.MasterVolume:F2}");
             SaveHardwareState();
             return;
         }
@@ -328,11 +348,18 @@ public class MidiHardwareService : IDisposable
                     UpdateChannelLeds(chIdx);
                 }
 
-                if (ch.LoadedStem != null && ch.LoadedStem.Tracks.Count > 0)
-                {
-                    string trackTitle = ch.LoadedStem.Tracks[0].FileName;
-                    _hudService?.ShowTrackVolumeInfo(chIdx, ch.LoadedStem.Name, trackTitle, "Knob 3 (Bottom)", floatVal, audioVolumePercent: ch.TrackVolumes[0]);
-                }
+                _hudService?.ShowChannelOverview(
+                    chIdx,
+                    ch,
+                    activeControl: "knob_0",
+                    isFaderDirty: _isFaderDirty[chIdx],
+                    isFaderMoving: _isFaderMoving[chIdx],
+                    isKnobDirty: _isKnobDirty[chIdx],
+                    isKnobMoving: _isKnobMoving[chIdx],
+                    lastFaderVol: _lastFaderVol,
+                    lastKnobVol: _lastKnobVol,
+                    dismissDelayMs: 1000
+                );
 
                 _knobMotionPauseTimers[chIdx][0]?.Dispose();
                 _knobMotionPauseTimers[chIdx][0] = new Timer(_ =>
@@ -357,11 +384,18 @@ public class MidiHardwareService : IDisposable
 
             _audioEngine.SetTrackVolume(chIdx, 0, floatVal, immediate: true);
 
-            if (ch.LoadedStem != null && ch.LoadedStem.Tracks.Count > 0)
-            {
-                string trackTitle = ch.LoadedStem.Tracks[0].FileName;
-                _hudService?.ShowTrackVolumeInfo(chIdx, ch.LoadedStem.Name, trackTitle, "Knob 3 (Bottom)", floatVal);
-            }
+            _hudService?.ShowChannelOverview(
+                chIdx,
+                ch,
+                activeControl: "knob_0",
+                isFaderDirty: _isFaderDirty[chIdx],
+                isFaderMoving: _isFaderMoving[chIdx],
+                isKnobDirty: _isKnobDirty[chIdx],
+                isKnobMoving: _isKnobMoving[chIdx],
+                lastFaderVol: _lastFaderVol,
+                lastKnobVol: _lastKnobVol,
+                dismissDelayMs: 1000
+            );
 
             SaveHardwareState();
             return;
@@ -386,11 +420,18 @@ public class MidiHardwareService : IDisposable
                     UpdateChannelLeds(chIdx);
                 }
 
-                if (ch.LoadedStem != null && ch.LoadedStem.Tracks.Count > 1)
-                {
-                    string trackTitle = ch.LoadedStem.Tracks[1].FileName;
-                    _hudService?.ShowTrackVolumeInfo(chIdx, ch.LoadedStem.Name, trackTitle, "Knob 2 (Middle)", floatVal, audioVolumePercent: ch.TrackVolumes[1]);
-                }
+                _hudService?.ShowChannelOverview(
+                    chIdx,
+                    ch,
+                    activeControl: "knob_1",
+                    isFaderDirty: _isFaderDirty[chIdx],
+                    isFaderMoving: _isFaderMoving[chIdx],
+                    isKnobDirty: _isKnobDirty[chIdx],
+                    isKnobMoving: _isKnobMoving[chIdx],
+                    lastFaderVol: _lastFaderVol,
+                    lastKnobVol: _lastKnobVol,
+                    dismissDelayMs: 1000
+                );
 
                 _knobMotionPauseTimers[chIdx][1]?.Dispose();
                 _knobMotionPauseTimers[chIdx][1] = new Timer(_ =>
@@ -415,11 +456,18 @@ public class MidiHardwareService : IDisposable
 
             _audioEngine.SetTrackVolume(chIdx, 1, floatVal, immediate: true);
 
-            if (ch.LoadedStem != null && ch.LoadedStem.Tracks.Count > 1)
-            {
-                string trackTitle = ch.LoadedStem.Tracks[1].FileName;
-                _hudService?.ShowTrackVolumeInfo(chIdx, ch.LoadedStem.Name, trackTitle, "Knob 2 (Middle)", floatVal);
-            }
+            _hudService?.ShowChannelOverview(
+                chIdx,
+                ch,
+                activeControl: "knob_1",
+                isFaderDirty: _isFaderDirty[chIdx],
+                isFaderMoving: _isFaderMoving[chIdx],
+                isKnobDirty: _isKnobDirty[chIdx],
+                isKnobMoving: _isKnobMoving[chIdx],
+                lastFaderVol: _lastFaderVol,
+                lastKnobVol: _lastKnobVol,
+                dismissDelayMs: 1000
+            );
 
             SaveHardwareState();
             return;
@@ -444,11 +492,18 @@ public class MidiHardwareService : IDisposable
                     UpdateChannelLeds(chIdx);
                 }
 
-                if (ch.LoadedStem != null && ch.LoadedStem.Tracks.Count > 2)
-                {
-                    string trackTitle = ch.LoadedStem.Tracks[2].FileName;
-                    _hudService?.ShowTrackVolumeInfo(chIdx, ch.LoadedStem.Name, trackTitle, "Knob 1 (Top)", floatVal, audioVolumePercent: ch.TrackVolumes[2]);
-                }
+                _hudService?.ShowChannelOverview(
+                    chIdx,
+                    ch,
+                    activeControl: "knob_2",
+                    isFaderDirty: _isFaderDirty[chIdx],
+                    isFaderMoving: _isFaderMoving[chIdx],
+                    isKnobDirty: _isKnobDirty[chIdx],
+                    isKnobMoving: _isKnobMoving[chIdx],
+                    lastFaderVol: _lastFaderVol,
+                    lastKnobVol: _lastKnobVol,
+                    dismissDelayMs: 1000
+                );
 
                 _knobMotionPauseTimers[chIdx][2]?.Dispose();
                 _knobMotionPauseTimers[chIdx][2] = new Timer(_ =>
@@ -473,11 +528,18 @@ public class MidiHardwareService : IDisposable
 
             _audioEngine.SetTrackVolume(chIdx, 2, floatVal, immediate: true);
 
-            if (ch.LoadedStem != null && ch.LoadedStem.Tracks.Count > 2)
-            {
-                string trackTitle = ch.LoadedStem.Tracks[2].FileName;
-                _hudService?.ShowTrackVolumeInfo(chIdx, ch.LoadedStem.Name, trackTitle, "Knob 1 (Top)", floatVal);
-            }
+            _hudService?.ShowChannelOverview(
+                chIdx,
+                ch,
+                activeControl: "knob_2",
+                isFaderDirty: _isFaderDirty[chIdx],
+                isFaderMoving: _isFaderMoving[chIdx],
+                isKnobDirty: _isKnobDirty[chIdx],
+                isKnobMoving: _isKnobMoving[chIdx],
+                lastFaderVol: _lastFaderVol,
+                lastKnobVol: _lastKnobVol,
+                dismissDelayMs: 1000
+            );
 
             SaveHardwareState();
             return;
@@ -640,7 +702,18 @@ public class MidiHardwareService : IDisposable
                         }
 
                         UpdateAllLeds();
-                        _hudService?.ShowChannelInfo(operChIdx, stemToMove);
+                        _hudService?.ShowChannelOverview(
+                            operChIdx,
+                            chDst,
+                            activeControl: "",
+                            isFaderDirty: _isFaderDirty[operChIdx],
+                            isFaderMoving: _isFaderMoving[operChIdx],
+                            isKnobDirty: _isKnobDirty[operChIdx],
+                            isKnobMoving: _isKnobMoving[operChIdx],
+                            lastFaderVol: _lastFaderVol,
+                            lastKnobVol: _lastKnobVol,
+                            dismissDelayMs: 3000
+                        );
                     }
                     else
                     {
@@ -771,7 +844,18 @@ public class MidiHardwareService : IDisposable
                 _hudService?.CloseClearConfirmation();
                 UpdateAllLeds();
 
-                _hudService?.ShowChannelInfo(targetCh, null);
+                _hudService?.ShowChannelOverview(
+                    targetCh,
+                    _audioEngine.Channels[targetCh],
+                    activeControl: "",
+                    isFaderDirty: _isFaderDirty[targetCh],
+                    isFaderMoving: _isFaderMoving[targetCh],
+                    isKnobDirty: _isKnobDirty[targetCh],
+                    isKnobMoving: _isKnobMoving[targetCh],
+                    lastFaderVol: _lastFaderVol,
+                    lastKnobVol: _lastKnobVol,
+                    dismissDelayMs: 3000
+                );
                 return;
             }
             else
@@ -809,7 +893,18 @@ public class MidiHardwareService : IDisposable
                     _hudService?.CloseAssignmentWizard();
                     UpdateAllLeds();
 
-                    _hudService?.ShowChannelInfo(targetCh, _audioEngine.Channels[targetCh].LoadedStem);
+                    _hudService?.ShowChannelOverview(
+                        targetCh,
+                        _audioEngine.Channels[targetCh],
+                        activeControl: "",
+                        isFaderDirty: _isFaderDirty[targetCh],
+                        isFaderMoving: _isFaderMoving[targetCh],
+                        isKnobDirty: _isKnobDirty[targetCh],
+                        isKnobMoving: _isKnobMoving[targetCh],
+                        lastFaderVol: _lastFaderVol,
+                        lastKnobVol: _lastKnobVol,
+                        dismissDelayMs: 3000
+                    );
                 }
                 return;
             }
@@ -821,8 +916,19 @@ public class MidiHardwareService : IDisposable
 
         var ch2 = _audioEngine.Channels[chIdx];
         string stemName2 = ch2.LoadedStem?.Name ?? "Unassigned";
-        Console.WriteLine($"[MIDI] Channel {chIdx} ({stemName2}) Bottom Button (Operation) Short-Pressed -> Showing HUD");
-        _hudService?.ShowChannelInfo(chIdx, ch2.LoadedStem);
+        Console.WriteLine($"[MIDI] Channel {chIdx} ({stemName2}) Bottom Button (Operation) Short-Pressed -> Showing Unified Channel Overview HUD");
+        _hudService?.ShowChannelOverview(
+            chIdx,
+            ch2,
+            activeControl: "",
+            isFaderDirty: _isFaderDirty[chIdx],
+            isFaderMoving: _isFaderMoving[chIdx],
+            isKnobDirty: _isKnobDirty[chIdx],
+            isKnobMoving: _isKnobMoving[chIdx],
+            lastFaderVol: _lastFaderVol,
+            lastKnobVol: _lastKnobVol,
+            dismissDelayMs: 3000
+        );
     }
 
     private void OnOperationButtonLongPress(int chIdx)

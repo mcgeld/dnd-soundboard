@@ -86,8 +86,8 @@ class Program
                 }
                 else if (keyInfo.Key == ConsoleKey.H)
                 {
-                    Console.WriteLine("\n[Manual Test] Triggering HUD Overlay for Channel 0...");
-                    hudService.ShowChannelInfo(0, audioEngine.Channels[0].LoadedStem);
+                    Console.WriteLine("\n[Manual Test] Triggering Unified Channel Overview HUD for Channel 0...");
+                    hudService.ShowChannelOverview(0, audioEngine.Channels[0], activeControl: "", dismissDelayMs: 3000);
                 }
             }
         }

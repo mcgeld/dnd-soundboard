@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -7,20 +8,24 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using SoundBoard.Helpers;
 using SoundBoard.Models;
 
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Frameless, ultralight translucent Topmost HUD overlay with Windows DWM Acrylic Glass Blur and ~20% opacity.
+/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay displaying Master Fader + all Track Knobs together.
 /// </summary>
 public class HudOverlayWindow : Window
 {
     private readonly TextBlock _channelBadgeText;
     private readonly TextBlock _categoryTagText;
-    private readonly TextBlock _stemTitleText;
-    private readonly StackPanel _tracksStackPanel;
+    private readonly TextBlock _muteStatusText;
+    private readonly Border _muteStatusPill;
+    private readonly StackPanel _mainStackPanel;
     private readonly Border _containerBorder;
+
+    private DisplayMonitorInfo? _targetMonitor;
 
     #region Win32 Acrylic Blur API
     [StructLayout(LayoutKind.Sequential)]
@@ -55,94 +60,76 @@ public class HudOverlayWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.Manual;
 
-        // Position near top-center of primary screen
-        double screenWidth = SystemParameters.PrimaryScreenWidth;
-        Left = (screenWidth - 440) / 2;
-        Top = 60;
-
-        // Ultralight Translucent Glassmorphism Container (Opacity ~20%)
         _containerBorder = new Border
         {
-            Width = 440,
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)), // ~20% ultralight translucent glass tint
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0x81, 0x8C, 0xF8)), // Subtle glowing indigo border
+            Width = 460,
+            Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
             BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(22, 16, 22, 16),
+            Padding = new Thickness(20, 16, 20, 16),
             Effect = new DropShadowEffect
             {
                 Color = Colors.Black,
                 Direction = 270,
                 ShadowDepth = 4,
-                BlurRadius = 16,
-                Opacity = 0.3
+                BlurRadius = 18,
+                Opacity = 0.35
             }
         };
 
-        var mainStack = new StackPanel();
+        _mainStackPanel = new StackPanel();
 
-        // Header Row (Channel Badge + Category Pill Tag)
+        // 1. Header Row (Channel Tag + Category Badge + Mute Status Pill)
         var headerGrid = new Grid();
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        var titleStack = new StackPanel { Orientation = Orientation.Horizontal };
+
         _channelBadgeText = new TextBlock
         {
-            Text = "CHANNEL 1",
-            FontWeight = FontWeights.Bold,
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC7, 0xD2, 0xFE)),
+            Text = "CHANNEL 1  ●  THUNDERSTORM",
+            FontWeight = FontWeights.ExtraBold,
+            FontSize = 13,
+            Foreground = Brushes.White,
             VerticalAlignment = VerticalAlignment.Center
         };
-        Grid.SetColumn(_channelBadgeText, 0);
+        titleStack.Children.Add(_channelBadgeText);
 
         _categoryTagText = new TextBlock
         {
-            Text = "Weather",
+            Text = "WEATHER",
             FontWeight = FontWeights.Bold,
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x93, 0xC5, 0xFD)),
-            Background = new SolidColorBrush(Color.FromArgb(0x44, 0x1E, 0x40, 0xAF)),
-            Padding = new Thickness(8, 3, 8, 3),
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)),
+            Margin = new Thickness(10, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
-        var categoryBorder = new Border
+        titleStack.Children.Add(_categoryTagText);
+
+        Grid.SetColumn(titleStack, 0);
+
+        _muteStatusPill = new Border
         {
             CornerRadius = new CornerRadius(6),
-            Child = _categoryTagText
+            Padding = new Thickness(8, 2, 8, 2),
+            VerticalAlignment = VerticalAlignment.Center
         };
-        Grid.SetColumn(categoryBorder, 1);
-
-        headerGrid.Children.Add(_channelBadgeText);
-        headerGrid.Children.Add(categoryBorder);
-        mainStack.Children.Add(headerGrid);
-
-        // Stem Title
-        _stemTitleText = new TextBlock
+        _muteStatusText = new TextBlock
         {
-            Text = "Thunderstorm",
             FontWeight = FontWeights.Bold,
-            FontSize = 22,
-            Foreground = Brushes.White,
-            Margin = new Thickness(0, 6, 0, 10),
-            TextTrimming = TextTrimming.CharacterEllipsis
+            FontSize = 10
         };
-        mainStack.Children.Add(_stemTitleText);
+        _muteStatusPill.Child = _muteStatusText;
+        Grid.SetColumn(_muteStatusPill, 1);
 
-        // Divider Line
-        var divider = new Border
-        {
-            Height = 1,
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        mainStack.Children.Add(divider);
+        headerGrid.Children.Add(titleStack);
+        headerGrid.Children.Add(_muteStatusPill);
 
-        // Track Allocation Stack
-        _tracksStackPanel = new StackPanel();
-        mainStack.Children.Add(_tracksStackPanel);
+        _mainStackPanel.Children.Add(headerGrid);
 
-        _containerBorder.Child = mainStack;
+        _containerBorder.Child = _mainStackPanel;
         Content = _containerBorder;
 
         Visibility = Visibility.Hidden;
@@ -157,8 +144,8 @@ public class HudOverlayWindow : Window
             var windowHelper = new WindowInteropHelper(this);
             var accent = new AccentPolicy
             {
-                AccentState = 4, // ACCENT_ENABLE_ACRYLICBLURBEHIND (Windows 10/11 Glass Blur)
-                GradientColor = (0x22 << 24) | 0x1A1012 // 0x22 Ultralight Alpha ARGB Gradient
+                AccentState = 4,
+                GradientColor = (0x22 << 24) | 0x1A1012
             };
 
             int accentSize = Marshal.SizeOf(accent);
@@ -167,7 +154,7 @@ public class HudOverlayWindow : Window
 
             var data = new WindowCompositionAttributeData
             {
-                Attribute = 19, // WCA_ACCENT_POLICY
+                Attribute = 19,
                 SizeOfData = accentSize,
                 Data = accentPtr
             };
@@ -178,108 +165,331 @@ public class HudOverlayWindow : Window
         catch { }
     }
 
-    public void UpdateDisplay(int channelIndex, Stem? stem)
+    public void UpdateChannelOverview(
+        int channelIndex,
+        Channel channel,
+        string activeControl = "", // "fader", "knob_0", "knob_1", "knob_2", or ""
+        bool isFaderDirty = false,
+        bool isFaderMoving = false,
+        bool[]? isKnobDirty = null,
+        bool[]? isKnobMoving = null,
+        float[]? lastFaderVol = null,
+        float[][]? lastKnobVol = null)
     {
-        _channelBadgeText.Text = $"CHANNEL {channelIndex + 1}";
+        int chNum = channelIndex + 1;
+        var stem = channel.LoadedStem;
+        string stemName = stem?.Name ?? "Unassigned";
+        string catName = stem?.CategoryName ?? "UNASSIGNED";
 
-        if (stem == null)
+        _channelBadgeText.Text = $"CHANNEL {chNum}  ●  {stemName.ToUpper()}";
+        _categoryTagText.Text = catName.ToUpper();
+
+        // Mute Status Pill
+        if (channel.IsMuted)
         {
-            _categoryTagText.Text = "Unassigned";
-            _stemTitleText.Text = "No Stem Loaded";
-            _tracksStackPanel.Children.Clear();
-
-            var emptyText = new TextBlock
-            {
-                Text = "This channel is currently unassigned.",
-                FontStyle = FontStyles.Italic,
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xBD, 0xC3, 0xC7))
-            };
-            _tracksStackPanel.Children.Add(emptyText);
-            return;
+            _muteStatusPill.Background = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0x47, 0x57));
+            _muteStatusPill.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
+            _muteStatusPill.BorderThickness = new Thickness(1);
+            _muteStatusText.Text = "MUTED";
+            _muteStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
+        }
+        else
+        {
+            _muteStatusPill.Background = new SolidColorBrush(Color.FromArgb(0x44, 0x34, 0xD3, 0x99));
+            _muteStatusPill.BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
+            _muteStatusPill.BorderThickness = new Thickness(1);
+            _muteStatusText.Text = "ACTIVE";
+            _muteStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
         }
 
-        _categoryTagText.Text = stem.CategoryName;
-        _stemTitleText.Text = stem.Name;
-        _tracksStackPanel.Children.Clear();
-
-        int trackCount = stem.Tracks.Count;
-        if (trackCount == 0)
+        // Clear dynamic control rows (keep header row at index 0)
+        while (_mainStackPanel.Children.Count > 1)
         {
-            var noTracksText = new TextBlock
-            {
-                Text = "No tracks in this stem.",
-                FontStyle = FontStyles.Italic,
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xBD, 0xC3, 0xC7))
-            };
-            _tracksStackPanel.Children.Add(noTracksText);
-            return;
+            _mainStackPanel.Children.RemoveAt(1);
         }
 
-        // Display Top-to-Bottom matching physical knob order on board: Knob 1 (Top), Knob 2 (Middle), Knob 3 (Bottom)
-        // Allocation rule is bottom-to-top: Track 0 = Knob 3 (Bottom), Track 1 = Knob 2 (Middle), Track 2 = Knob 1 (Top)
-        for (int knobIndex = 0; knobIndex < 3; knobIndex++)
+        // Separator
+        _mainStackPanel.Children.Add(new Border
         {
-            int knobNumber = knobIndex + 1; // 1 = Top, 2 = Middle, 3 = Bottom
-            string knobLabel = knobNumber == 1 ? "Knob 1 (Top)" : knobNumber == 2 ? "Knob 2 (Middle)" : "Knob 3 (Bottom)";
-            int trackIdx = 3 - knobNumber;  // Map Knob 3 -> Track 0, Knob 2 -> Track 1, Knob 1 -> Track 2
+            Height = 1,
+            Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
+            Margin = new Thickness(0, 10, 0, 10)
+        });
 
-            var rowGrid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
-            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // 2. MASTER FADER ROW
+        float faderHwVal = (lastFaderVol != null && lastFaderVol.Length > channelIndex) ? lastFaderVol[channelIndex] : channel.MasterVolume;
+        float? faderGhostVal = isFaderDirty ? channel.MasterVolume : null;
+        bool isFaderActive = activeControl == "fader";
 
-            if (trackIdx < trackCount)
+        var faderRow = CreateVolumeRow(
+            labelText: "Master Fader",
+            subLabelText: $"Fader {chNum}",
+            titleText: "Master Volume",
+            hardwareValue: isFaderDirty ? faderHwVal : channel.MasterVolume,
+            audioGhostValue: faderGhostVal,
+            isDirty: isFaderDirty,
+            isMoving: isFaderMoving,
+            isActiveControl: isFaderActive,
+            isMasterRow: true
+        );
+        _mainStackPanel.Children.Add(faderRow);
+
+        // 3. TRACK KNOB ROWS (Knob 3 Bottom, Knob 2 Middle, Knob 1 Top)
+        string[] knobLabels = new string[] { "Knob 3 (Bottom)", "Knob 2 (Middle)", "Knob 1 (Top)" };
+
+        int trackCount = stem?.Tracks.Count ?? 0;
+
+        for (int t = 0; t < 3; t++)
+        {
+            bool isKnobDirtyVal = (isKnobDirty != null && isKnobDirty.Length > t) ? isKnobDirty[t] : false;
+            bool isKnobMovingVal = (isKnobMoving != null && isKnobMoving.Length > t) ? isKnobMoving[t] : false;
+            float knobHwVal = (lastKnobVol != null && lastKnobVol.Length > channelIndex && lastKnobVol[channelIndex].Length > t) ? lastKnobVol[channelIndex][t] : channel.TrackVolumes[t];
+            float? knobGhostVal = isKnobDirtyVal ? channel.TrackVolumes[t] : null;
+            bool isKnobActive = activeControl == $"knob_{t}";
+
+            if (t < trackCount && stem != null && stem.Tracks.Count > t)
             {
-                string displayName = Path.GetFileNameWithoutExtension(stem.Tracks[trackIdx].FileName);
-
-                var knobText = new TextBlock
-                {
-                    Text = $"● {knobLabel}:",
-                    FontSize = 12,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)) // Emerald green dial indicator
-                };
-                var trackText = new TextBlock
-                {
-                    Text = displayName,
-                    FontSize = 12,
-                    Foreground = Brushes.White,
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                };
-                Grid.SetColumn(knobText, 0);
-                Grid.SetColumn(trackText, 1);
-                rowGrid.Children.Add(knobText);
-                rowGrid.Children.Add(trackText);
+                var track = stem.Tracks[t];
+                var trackRow = CreateVolumeRow(
+                    labelText: knobLabels[t],
+                    subLabelText: $"Track {t + 1}",
+                    titleText: Path.GetFileNameWithoutExtension(track.FileName),
+                    hardwareValue: isKnobDirtyVal ? knobHwVal : channel.TrackVolumes[t],
+                    audioGhostValue: knobGhostVal,
+                    isDirty: isKnobDirtyVal,
+                    isMoving: isKnobMovingVal,
+                    isActiveControl: isKnobActive,
+                    isMasterRow: false
+                );
+                _mainStackPanel.Children.Add(trackRow);
             }
             else
             {
-                var knobText = new TextBlock
-                {
-                    Text = $"○ {knobLabel}:",
-                    FontSize = 12,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)) // OFF dial indicator
-                };
-                var trackText = new TextBlock
-                {
-                    Text = "Unassigned",
-                    FontSize = 12,
-                    FontStyle = FontStyles.Italic,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF))
-                };
-                Grid.SetColumn(knobText, 0);
-                Grid.SetColumn(trackText, 1);
-                rowGrid.Children.Add(knobText);
-                rowGrid.Children.Add(trackText);
+                // Unassigned / Empty Slot Row
+                var emptyRow = CreateEmptyRow(knobLabels[t]);
+                _mainStackPanel.Children.Add(emptyRow);
             }
-
-            _tracksStackPanel.Children.Add(rowGrid);
         }
     }
 
-    private Helpers.DisplayMonitorInfo? _targetMonitor;
+    private Border CreateVolumeRow(
+        string labelText,
+        string subLabelText,
+        string titleText,
+        float hardwareValue,
+        float? audioGhostValue,
+        bool isDirty,
+        bool isMoving,
+        bool isActiveControl,
+        bool isMasterRow)
+    {
+        // Border Accent Color
+        Color accentColor;
+        if (isDirty)
+        {
+            accentColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // Amber for Dirty Soft-Catch
+        }
+        else if (isMasterRow)
+        {
+            accentColor = Color.FromRgb(0x81, 0x8C, 0xF8); // Indigo for Master
+        }
+        else
+        {
+            accentColor = Color.FromRgb(0x34, 0xD3, 0x99); // Emerald for Track Dial
+        }
 
-    public void SetTargetMonitor(Helpers.DisplayMonitorInfo monitor)
+        var rowBorder = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 2, 0, 4),
+            Background = isActiveControl
+                ? new SolidColorBrush(Color.FromArgb(0x44, accentColor.R, accentColor.G, accentColor.B))
+                : new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = isActiveControl
+                ? new SolidColorBrush(accentColor)
+                : new SolidColorBrush(Color.FromArgb(0x33, accentColor.R, accentColor.G, accentColor.B)),
+            BorderThickness = new Thickness(isActiveControl ? 1.5 : 1)
+        };
+
+        var rowStack = new StackPanel();
+
+        // Top Info Line (Label + Track Title)
+        var infoGrid = new Grid();
+        infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var titleStack = new StackPanel { Orientation = Orientation.Horizontal };
+
+        var labelBlock = new TextBlock
+        {
+            Text = labelText.ToUpper(),
+            FontWeight = FontWeights.Bold,
+            FontSize = 10,
+            Foreground = new SolidColorBrush(accentColor),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        titleStack.Children.Add(labelBlock);
+
+        var titleBlock = new TextBlock
+        {
+            Text = titleText,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 13,
+            Foreground = Brushes.White,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        titleStack.Children.Add(titleBlock);
+        Grid.SetColumn(titleStack, 0);
+
+        int hwPct = (int)Math.Round(hardwareValue * 100);
+        string pctString = audioGhostValue.HasValue
+            ? $"{hwPct}% (Audio: {(int)Math.Round(audioGhostValue.Value * 100)}%)"
+            : $"{hwPct}%";
+
+        var pctBlock = new TextBlock
+        {
+            Text = pctString,
+            FontWeight = FontWeights.Bold,
+            FontSize = 11,
+            Foreground = Brushes.White,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(pctBlock, 1);
+
+        infoGrid.Children.Add(titleStack);
+        infoGrid.Children.Add(pctBlock);
+        rowStack.Children.Add(infoGrid);
+
+        // Dual Track Bar
+        var progressBgContainer = new Border
+        {
+            Height = 8,
+            CornerRadius = new CornerRadius(4),
+            Background = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 6, 0, 0),
+            ClipToBounds = true
+        };
+
+        var dualStackGrid = new Grid();
+
+        // 1. PRIMARY HARDWARE BAR (Layer 0)
+        var progressGrid = new Grid();
+        float filledWeight = Math.Clamp(hardwareValue, 0.001f, 1.0f);
+        float emptyWeight = 1.0f - hardwareValue;
+
+        var filledCol = new ColumnDefinition { Width = new GridLength(filledWeight, GridUnitType.Star) };
+        var emptyCol = new ColumnDefinition { Width = new GridLength(emptyWeight, GridUnitType.Star) };
+        progressGrid.ColumnDefinitions.Add(filledCol);
+        progressGrid.ColumnDefinitions.Add(emptyCol);
+
+        var fillBar = new Border
+        {
+            Height = 8,
+            CornerRadius = new CornerRadius(4),
+            Background = new SolidColorBrush(accentColor),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        Grid.SetColumn(fillBar, 0);
+        progressGrid.Children.Add(fillBar);
+        dualStackGrid.Children.Add(progressGrid);
+
+        // 2. GHOST CURRENT AUDIO BAR (Layer 1 - Renders ON TOP)
+        if (audioGhostValue.HasValue)
+        {
+            var ghostGrid = new Grid();
+            float ghostFilled = Math.Clamp(audioGhostValue.Value, 0.001f, 1.0f);
+            float ghostEmpty = 1.0f - audioGhostValue.Value;
+
+            var ghostFilledCol = new ColumnDefinition { Width = new GridLength(ghostFilled, GridUnitType.Star) };
+            var ghostEmptyCol = new ColumnDefinition { Width = new GridLength(ghostEmpty, GridUnitType.Star) };
+            ghostGrid.ColumnDefinitions.Add(ghostFilledCol);
+            ghostGrid.ColumnDefinitions.Add(ghostEmptyCol);
+
+            var ghostFillBar = new Border
+            {
+                Height = 8,
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF)),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(0, 0, 2, 0),
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            Grid.SetColumn(ghostFillBar, 0);
+            ghostGrid.Children.Add(ghostFillBar);
+            dualStackGrid.Children.Add(ghostGrid);
+        }
+
+        progressBgContainer.Child = dualStackGrid;
+        rowStack.Children.Add(progressBgContainer);
+
+        rowBorder.Child = rowStack;
+        return rowBorder;
+    }
+
+    private Border CreateEmptyRow(string labelText)
+    {
+        var rowBorder = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 6, 10, 6),
+            Margin = new Thickness(0, 2, 0, 4),
+            Background = new SolidColorBrush(Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1)
+        };
+
+        var infoGrid = new Grid();
+        infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var titleStack = new StackPanel { Orientation = Orientation.Horizontal };
+
+        var labelBlock = new TextBlock
+        {
+            Text = labelText.ToUpper(),
+            FontWeight = FontWeights.Bold,
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        titleStack.Children.Add(labelBlock);
+
+        var titleBlock = new TextBlock
+        {
+            Text = "Unassigned Slot",
+            FontWeight = FontWeights.Medium,
+            FontSize = 12,
+            FontStyle = FontStyles.Italic,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        titleStack.Children.Add(titleBlock);
+        Grid.SetColumn(titleStack, 0);
+
+        var pctBlock = new TextBlock
+        {
+            Text = "--",
+            FontWeight = FontWeights.Bold,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(pctBlock, 1);
+
+        infoGrid.Children.Add(titleStack);
+        infoGrid.Children.Add(pctBlock);
+
+        rowBorder.Child = infoGrid;
+        return rowBorder;
+    }
+
+    public void SetTargetMonitor(DisplayMonitorInfo monitor)
     {
         _targetMonitor = monitor;
         PositionOnMonitor();
@@ -289,14 +499,14 @@ public class HudOverlayWindow : Window
     {
         if (_targetMonitor != null)
         {
-            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 440) / 2;
-            Top = _targetMonitor.Bounds.Top + 60;
+            Left = _targetMonitor.Bounds.Left + (_targetMonitor.Bounds.Width - 460) / 2;
+            Top = _targetMonitor.Bounds.Top + 50;
         }
         else
         {
             double screenWidth = SystemParameters.PrimaryScreenWidth;
-            Left = (screenWidth - 440) / 2;
-            Top = 60;
+            Left = (screenWidth - 460) / 2;
+            Top = 50;
         }
     }
 
@@ -305,17 +515,10 @@ public class HudOverlayWindow : Window
         PositionOnMonitor();
 
         BeginAnimation(OpacityProperty, null);
+        Opacity = 1.0;
         Topmost = true;
         Visibility = Visibility.Visible;
         Show();
-
-        var anim = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = TimeSpan.FromMilliseconds(180)
-        };
-        BeginAnimation(OpacityProperty, anim);
     }
 
     public void HideHud()
@@ -324,7 +527,7 @@ public class HudOverlayWindow : Window
         {
             From = Opacity,
             To = 0,
-            Duration = TimeSpan.FromMilliseconds(250)
+            Duration = TimeSpan.FromMilliseconds(180)
         };
         anim.Completed += (s, e) =>
         {
