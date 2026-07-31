@@ -14,7 +14,7 @@ using SoundBoard.Models;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay displaying Vertical Master Fader on left + Track Knobs stacked top-to-bottom on right.
+/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay displaying Vertical Master Fader with parallel label + Track Knobs stacked top-to-bottom on right.
 /// </summary>
 public class HudOverlayWindow : Window
 {
@@ -296,9 +296,8 @@ public class HudOverlayWindow : Window
 
         var outerBorder = new Border
         {
-            Width = 64,
             CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(6, 8, 6, 8),
+            Padding = new Thickness(8, 8, 8, 8),
             Margin = new Thickness(0, 2, 12, 4),
             Background = isActiveControl
                 ? new SolidColorBrush(Color.FromArgb(0x44, accentColor.R, accentColor.G, accentColor.B))
@@ -309,11 +308,45 @@ public class HudOverlayWindow : Window
             BorderThickness = new Thickness(isActiveControl ? 1.5 : 1)
         };
 
-        var mainGrid = new Grid();
-        mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Vertical Progress Bar
-        mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                      // Bottom Text
+        // 2-Column Grid: Column 0 = Parallel Rotated "MASTER" Label | Column 1 = Vertical Bar + Top Pct Text
+        var masterGrid = new Grid();
+        masterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        masterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        // 1. VERTICAL DUAL PROGRESS BAR
+        // 1. PARALLEL ROTATED "MASTER" LABEL (Column 0)
+        var rotText = new TextBlock
+        {
+            Text = "MASTER",
+            FontWeight = FontWeights.ExtraBold,
+            FontSize = 10,
+            Foreground = new SolidColorBrush(accentColor),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(2, 0, 8, 0),
+            LayoutTransform = new RotateTransform(-90)
+        };
+        Grid.SetColumn(rotText, 0);
+        masterGrid.Children.Add(rotText);
+
+        // 2. VERTICAL BAR STACK (Column 1) - Stretches to 100% Height of Knob Stack!
+        var barGrid = new Grid();
+        barGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // Top Pct Text
+        barGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Full Height Vertical Bar
+
+        int hwPct = (int)Math.Round(hardwareValue * 100);
+        var pctBlock = new TextBlock
+        {
+            Text = $"{hwPct}%",
+            FontWeight = FontWeights.Bold,
+            FontSize = 11,
+            Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        Grid.SetRow(pctBlock, 0);
+        barGrid.Children.Add(pctBlock);
+
+        // Full Height Vertical Bar Container
         var progressContainer = new Border
         {
             Width = 10,
@@ -321,7 +354,6 @@ public class HudOverlayWindow : Window
             Background = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Stretch,
-            Margin = new Thickness(0, 0, 0, 8),
             ClipToBounds = true
         };
 
@@ -360,7 +392,7 @@ public class HudOverlayWindow : Window
                 CornerRadius = new CornerRadius(5),
                 Background = new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF)),
                 BorderBrush = Brushes.White,
-                BorderThickness = new Thickness(0, 2, 0, 0), // Top marker line for vertical bar
+                BorderThickness = new Thickness(0, 2, 0, 0),
                 VerticalAlignment = VerticalAlignment.Stretch
             };
             Grid.SetRow(ghostFillBar, 1);
@@ -369,42 +401,13 @@ public class HudOverlayWindow : Window
         }
 
         progressContainer.Child = verticalDualGrid;
-        Grid.SetRow(progressContainer, 0);
-        mainGrid.Children.Add(progressContainer);
+        Grid.SetRow(progressContainer, 1);
+        barGrid.Children.Add(progressContainer);
 
-        // 2. BOTTOM TEXT BLOCK (Percentage + Vertical Rotated "MASTER" Label)
-        var bottomStack = new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
+        Grid.SetColumn(barGrid, 1);
+        masterGrid.Children.Add(barGrid);
 
-        int hwPct = (int)Math.Round(hardwareValue * 100);
-        var pctBlock = new TextBlock
-        {
-            Text = $"{hwPct}%",
-            FontWeight = FontWeights.Bold,
-            FontSize = 11,
-            Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 2)
-        };
-        bottomStack.Children.Add(pctBlock);
-
-        var rotText = new TextBlock
-        {
-            Text = "MASTER",
-            FontWeight = FontWeights.ExtraBold,
-            FontSize = 9,
-            Foreground = new SolidColorBrush(accentColor),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            LayoutTransform = new RotateTransform(-90)
-        };
-        bottomStack.Children.Add(rotText);
-
-        Grid.SetRow(bottomStack, 1);
-        mainGrid.Children.Add(bottomStack);
-
-        outerBorder.Child = mainGrid;
+        outerBorder.Child = masterGrid;
         return outerBorder;
     }
 
