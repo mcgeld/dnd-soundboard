@@ -14,7 +14,7 @@ using SoundBoard.Models;
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay with neutral background and Red (Muted) vs Green (Active) border & progress bar colors.
+/// Frameless, ultralight translucent Topmost Channel Overview HUD overlay with neutral black DropShadow and crisp Red (Muted) vs Green (Active) border.
 /// </summary>
 public class HudOverlayWindow : Window
 {
@@ -70,7 +70,7 @@ public class HudOverlayWindow : Window
             Padding = new Thickness(18, 14, 18, 14),
             Effect = new DropShadowEffect
             {
-                Color = Color.FromRgb(0x34, 0xD3, 0x99),
+                Color = Colors.Black,
                 Direction = 270,
                 ShadowDepth = 4,
                 BlurRadius = 18,
@@ -183,22 +183,22 @@ public class HudOverlayWindow : Window
 
         _channelBadgeText.Text = $"CHANNEL {chNum}  ●  {stemName.ToUpper()}";
 
-        // Keep standard dark glass background neutral for optimal readability
+        // Neutral dark glass background & neutral black DropShadow (prevents color bleed through transparent glass)
         _containerBorder.Background = new SolidColorBrush(Color.FromArgb(0x33, 0x0F, 0x11, 0x1B));
+        _containerBorder.Effect = new DropShadowEffect
+        {
+            Color = Colors.Black,
+            Direction = 270,
+            ShadowDepth = 4,
+            BlurRadius = 18,
+            Opacity = 0.35
+        };
 
-        // OUTER WINDOW BORDER & AMBIENT GLOW (Red when Muted | Emerald Green when Active)
+        // OUTER WINDOW BORDER LINE & BADGE (Red when Muted | Emerald Green when Active)
         if (channel.IsMuted)
         {
             _containerBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
             _containerBorder.BorderThickness = new Thickness(2.0);
-            _containerBorder.Effect = new DropShadowEffect
-            {
-                Color = Color.FromRgb(0xFF, 0x47, 0x57),
-                Direction = 270,
-                ShadowDepth = 4,
-                BlurRadius = 24,
-                Opacity = 0.5
-            };
 
             _muteStatusPill.Background = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
             _muteStatusPill.BorderBrush = Brushes.Transparent;
@@ -210,14 +210,6 @@ public class HudOverlayWindow : Window
         {
             _containerBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
             _containerBorder.BorderThickness = new Thickness(1.5);
-            _containerBorder.Effect = new DropShadowEffect
-            {
-                Color = Color.FromRgb(0x34, 0xD3, 0x99),
-                Direction = 270,
-                ShadowDepth = 4,
-                BlurRadius = 18,
-                Opacity = 0.35
-            };
 
             _muteStatusPill.Background = new SolidColorBrush(Color.FromArgb(0x44, 0x34, 0xD3, 0x99));
             _muteStatusPill.BorderBrush = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
