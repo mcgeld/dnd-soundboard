@@ -701,23 +701,24 @@ public class MidiHardwareService : IDisposable
 
         if (operChIdx >= 0 && operChIdx < 8)
         {
+            // PRESET CREATION MODE: Toggle channel selection via Operation Buttons!
+            if (_isPresetSaveActive)
+            {
+                if (isNoteOn && !_isPresetNamingStep)
+                {
+                    if (_audioEngine.Channels[operChIdx].LoadedStem != null)
+                    {
+                        _presetSelectedChannels[operChIdx] = !_presetSelectedChannels[operChIdx];
+                        Console.WriteLine($"[Preset Save] Channel {operChIdx + 1} Selection Toggled -> {(_presetSelectedChannels[operChIdx] ? "INCLUDED (Green)" : "REMOVED (Amber)")}");
+                        UpdateAllLeds();
+                        _hudService?.UpdatePresetSaveWindow(_audioEngine.Channels, _presetSelectedChannels);
+                    }
+                }
+                return;
+            }
+
             if (isNoteOn)
             {
-                // PRESET CREATION MODE: Toggle channel selection via Operation Buttons!
-                if (_isPresetSaveActive)
-                {
-                    if (isNoteOn && !_isPresetNamingStep)
-                    {
-                        if (_audioEngine.Channels[operChIdx].LoadedStem != null)
-                        {
-                            _presetSelectedChannels[operChIdx] = !_presetSelectedChannels[operChIdx];
-                            Console.WriteLine($"[Preset Save] Channel {operChIdx + 1} Selection Toggled -> {(_presetSelectedChannels[operChIdx] ? "INCLUDED (Green)" : "REMOVED (Amber)")}");
-                            UpdateAllLeds();
-                            _hudService?.UpdatePresetSaveWindow(_audioEngine.Channels, _presetSelectedChannels);
-                        }
-                    }
-                    return;
-                }
 
                 // CHECK FOR CHANNEL MOVE/SWAP GESTURE: Is another Operation button held down right now?
                 int heldCh = -1;
