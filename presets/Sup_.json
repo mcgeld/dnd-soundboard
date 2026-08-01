@@ -1,0 +1,54 @@
+{
+  "Name": "Sup?",
+  "CreatedAt": "2026-07-31T23:22:32.0799002-06:00",
+  "ChannelSnapshots": [
+    {
+      "RelativeChannelIndex": 0,
+      "CategoryName": "Locale",
+      "StemName": "Campfire",
+      "MasterVolume": 0.5905512,
+      "TrackVolumes": [
+        0.4566929,
+        0.27559054,
+        1
+      ],
+      "IsMuted": true
+    },
+    {
+      "RelativeChannelIndex": 1,
+      "CategoryName": "Locale",
+      "StemName": "Stream",
+      "MasterVolume": 0.63779527,
+      "TrackVolumes": [
+        0.36220473,
+        0.28346458,
+        0.51968503
+      ],
+      "IsMuted": true
+    },
+    {
+      "RelativeChannelIndex": 2,
+      "CategoryName": "Locale",
+      "StemName": "Road",
+      "MasterVolume": 0.6771653,
+      "TrackVolumes": [
+        0.43307087,
+        0.26771653,
+        0.96850395
+      ],
+      "IsMuted": false
+    },
+    {
+      "RelativeChannelIndex": 3,
+      "CategoryName": "Weather",
+      "StemName": "Thunderstorm",
+      "MasterVolume": 0.23622048,
+      "TrackVolumes": [
+        0.37007874,
+        0.48818898,
+        1
+      ],
+      "IsMuted": false
+    }
+  ]
+}

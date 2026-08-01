@@ -924,46 +924,74 @@ public class MidiHardwareService : IDisposable
                     CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
 
                     var chSrc = _audioEngine.Channels[heldCh];
-                    var stemToMove = chSrc.LoadedStem;
+                    var chDst = _audioEngine.Channels[operChIdx];
 
-                    if (stemToMove != null)
+                    var stemSrc = chSrc.LoadedStem;
+                    var stemDst = chDst.LoadedStem;
+
+                    if (stemSrc != null)
                     {
-                        Console.WriteLine($"[MIDI MOVE GESTURE] Moving Stem '[{stemToMove.Name}]' from Channel {heldCh + 1} -> Channel {operChIdx + 1}");
+                        Console.WriteLine($"[MIDI MOVE GESTURE] Moving/Swapping Stem '[{stemSrc.Name}]' (Ch {heldCh + 1}) <-> Ch {operChIdx + 1}");
 
-                        bool wasMuted = chSrc.IsMuted;
-                        float masterVol = chSrc.MasterVolume;
-                        float k0 = chSrc.TrackVolumes[0];
-                        float k1 = chSrc.TrackVolumes[1];
-                        float k2 = chSrc.TrackVolumes[2];
+                        // Record Source Channel State
+                        bool srcMuted = chSrc.IsMuted;
+                        float srcMasterVol = chSrc.MasterVolume;
+                        float[] srcTrackVols = (float[])chSrc.TrackVolumes.Clone();
 
-                        _audioEngine.LoadStemToChannel(heldCh, null);
-                        _isFaderDirty[heldCh] = false;
-                        _isFaderMoving[heldCh] = false;
-                        for (int t = 0; t < 3; t++)
-                        {
-                            _isKnobDirty[heldCh][t] = false;
-                            _isKnobMoving[heldCh][t] = false;
-                        }
+                        // Record Destination Channel State (if assigned)
+                        bool dstMuted = chDst.IsMuted;
+                        float dstMasterVol = chDst.MasterVolume;
+                        float[] dstTrackVols = (float[])chDst.TrackVolumes.Clone();
 
-                        _audioEngine.LoadStemToChannel(operChIdx, stemToMove);
-
-                        var chDst = _audioEngine.Channels[operChIdx];
-                        chDst.IsMuted = wasMuted;
-                        chDst.MasterVolume = masterVol;
-                        chDst.TrackVolumes[0] = k0;
-                        chDst.TrackVolumes[1] = k1;
-                        chDst.TrackVolumes[2] = k2;
-
+                        // 1. Move Stem Src -> Destination Channel
+                        _audioEngine.LoadStemToChannel(operChIdx, stemSrc);
+                        chDst.IsMuted = srcMuted; // Preserve original mute state!
+                        chDst.MasterVolume = srcMasterVol;
+                        chDst.TrackVolumes[0] = srcTrackVols[0];
+                        chDst.TrackVolumes[1] = srcTrackVols[1];
+                        chDst.TrackVolumes[2] = srcTrackVols[2];
                         _audioEngine.UpdateChannelEffectiveVolumes(operChIdx, immediate: true);
 
                         _isFaderDirty[operChIdx] = true;
                         _isFaderMoving[operChIdx] = false;
-
-                        int trackCount = stemToMove.Tracks.Count;
+                        int trackCountDst = stemSrc.Tracks.Count;
                         for (int t = 0; t < 3; t++)
                         {
-                            _isKnobDirty[operChIdx][t] = t < trackCount;
+                            _isKnobDirty[operChIdx][t] = t < trackCountDst;
                             _isKnobMoving[operChIdx][t] = false;
+                        }
+
+                        // 2. If Destination Channel had a stem, swap Stem Dst -> Source Channel
+                        if (stemDst != null)
+                        {
+                            _audioEngine.LoadStemToChannel(heldCh, stemDst);
+                            chSrc.IsMuted = dstMuted; // Preserve original mute state!
+                            chSrc.MasterVolume = dstMasterVol;
+                            chSrc.TrackVolumes[0] = dstTrackVols[0];
+                            chSrc.TrackVolumes[1] = dstTrackVols[1];
+                            chSrc.TrackVolumes[2] = dstTrackVols[2];
+                            _audioEngine.UpdateChannelEffectiveVolumes(heldCh, immediate: true);
+
+                            _isFaderDirty[heldCh] = true;
+                            _isFaderMoving[heldCh] = false;
+                            int trackCountSrc = stemDst.Tracks.Count;
+                            for (int t = 0; t < 3; t++)
+                            {
+                                _isKnobDirty[heldCh][t] = t < trackCountSrc;
+                                _isKnobMoving[heldCh][t] = false;
+                            }
+                        }
+                        else
+                        {
+                            // Destination was empty -> Clear Source Channel
+                            _audioEngine.LoadStemToChannel(heldCh, null);
+                            _isFaderDirty[heldCh] = false;
+                            _isFaderMoving[heldCh] = false;
+                            for (int t = 0; t < 3; t++)
+                            {
+                                _isKnobDirty[heldCh][t] = false;
+                                _isKnobMoving[heldCh][t] = false;
+                            }
                         }
 
                         UpdateAllLeds();
