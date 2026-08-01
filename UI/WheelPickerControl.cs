@@ -29,7 +29,7 @@ public class WheelPickerControl : UserControl
         };
 
         ClipToBounds = true;
-        Height = 190; // Viewport height (5 full rows visible without clipping)
+        Height = 220; // Viewport height (6+ full rows visible without clipping)
         Content = _wheelContainer;
     }
 
@@ -40,6 +40,7 @@ public class WheelPickerControl : UserControl
         if (items == null || items.Count == 0)
         {
             _previousIndex = -1;
+            _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
             _translateTransform.Y = 0;
 
             var emptyLabel = new TextBlock
@@ -49,7 +50,7 @@ public class WheelPickerControl : UserControl
                 FontSize = 13,
                 Foreground = Brushes.Gray,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 80, 0, 0)
+                Margin = new Thickness(0, 90, 0, 0)
             };
             _wheelContainer.Children.Add(emptyLabel);
             return;
@@ -94,8 +95,8 @@ public class WheelPickerControl : UserControl
             }
             else
             {
-                // UNSELECTED ITEM (Smooth fade for items further away)
-                double opacity = dist == 1 ? 0.65 : (dist == 2 ? 0.35 : 0.18);
+                // UNSELECTED ITEM (Clear visible opacity for all rows)
+                double opacity = dist == 1 ? 0.70 : (dist == 2 ? 0.45 : 0.30);
                 double fontSize = dist == 1 ? 13 : 11;
 
                 itemBorder = new Border
@@ -123,11 +124,14 @@ public class WheelPickerControl : UserControl
             _wheelContainer.Children.Add(itemBorder);
         }
 
-        // Target Y position to center selected item inside 190px viewport
-        // Viewport height = 190px, Center offset = (190 / 2) - (ItemRowHeight / 2) = 95 - 18 = 77.0px
-        double targetY = 77.0 - (selectedIndex * ItemRowHeight);
+        // Target Y position to center selected item inside 220px viewport
+        // Viewport height = 220px, Center offset = (220 / 2) - (ItemRowHeight / 2) = 110 - 18 = 92.0px
+        double targetY = 92.0 - (selectedIndex * ItemRowHeight);
 
-        if (_previousIndex < 0 || Math.Abs(selectedIndex - _previousIndex) > 3)
+        // CLEAR WPF ANIMATION CLOCK TO PREVENT PROPERTY ASSIGNMENT LOCK!
+        _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
+
+        if (_previousIndex < 0 || Math.Abs(selectedIndex - _previousIndex) > 2)
         {
             _translateTransform.Y = targetY;
         }
@@ -137,10 +141,14 @@ public class WheelPickerControl : UserControl
             {
                 From = _translateTransform.Y,
                 To = targetY,
-                Duration = TimeSpan.FromMilliseconds(130),
+                Duration = TimeSpan.FromMilliseconds(110),
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             _translateTransform.BeginAnimation(TranslateTransform.YProperty, anim);
+        }
+        else
+        {
+            _translateTransform.Y = targetY;
         }
 
         _previousIndex = selectedIndex;
