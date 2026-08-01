@@ -28,8 +28,8 @@ public class WheelPickerControl : UserControl
             RenderTransform = _translateTransform
         };
 
-        ClipToBounds = true;
-        Height = 220; // Viewport height (6+ full rows visible without clipping)
+        ClipToBounds = false; // Disable hard clipping so items near viewport bounds render smoothly!
+        Height = 220;
         Content = _wheelContainer;
     }
 
@@ -42,6 +42,7 @@ public class WheelPickerControl : UserControl
             _previousIndex = -1;
             _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
             _translateTransform.Y = 0;
+            Height = 150;
 
             var emptyLabel = new TextBlock
             {
@@ -50,11 +51,15 @@ public class WheelPickerControl : UserControl
                 FontSize = 13,
                 Foreground = Brushes.Gray,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 90, 0, 0)
+                Margin = new Thickness(0, 60, 0, 0)
             };
             _wheelContainer.Children.Add(emptyLabel);
             return;
         }
+
+        // Dynamically scale viewport height based on item count so short & long lists fit cleanly!
+        double dynamicHeight = Math.Clamp(items.Count * 36 + 24, 160, 360);
+        Height = dynamicHeight;
 
         selectedIndex = Math.Clamp(selectedIndex, 0, items.Count - 1);
 
@@ -124,9 +129,10 @@ public class WheelPickerControl : UserControl
             _wheelContainer.Children.Add(itemBorder);
         }
 
-        // Target Y position to center selected item inside 220px viewport
-        // Viewport height = 220px, Center offset = (220 / 2) - (ItemRowHeight / 2) = 110 - 18 = 92.0px
-        double targetY = 92.0 - (selectedIndex * ItemRowHeight);
+        // Target Y position to center selected item inside dynamicHeight viewport
+        // Center offset = (dynamicHeight / 2) - (ItemRowHeight / 2) = (dynamicHeight / 2) - 18.0px
+        double centerY = (dynamicHeight / 2.0) - 18.0;
+        double targetY = centerY - (selectedIndex * ItemRowHeight);
 
         // CLEAR WPF ANIMATION CLOCK TO PREVENT PROPERTY ASSIGNMENT LOCK!
         _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
