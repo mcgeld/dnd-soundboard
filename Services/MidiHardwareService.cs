@@ -642,15 +642,15 @@ public class MidiHardwareService : IDisposable
             return;
         }
 
-        // PRESET CREATION / SAVE BUTTON (Note 107)
-        if (note == 107)
+        // PRESET CREATION / SAVE BUTTON (Record Arm / Note 108)
+        if (note == 108)
         {
             if (isNoteOn)
             {
                 if (!_isPresetSaveActive)
                 {
                     // Step 1: Start Preset Creation Mode
-                    Console.WriteLine("[Preset Save] Note 107 Pressed -> Entering Preset Creation Mode");
+                    Console.WriteLine("[Preset Save] Note 108 Pressed -> Entering Preset Creation Mode");
                     CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
 
                     _isPresetSaveActive = true;
@@ -1242,17 +1242,11 @@ public class MidiHardwareService : IDisposable
         // Global Master MUTE Button LED (Note 106): ALWAYS LIT Solid Green
         SendRawLed(106, LedGreenFull);
 
-        // Preset Save Button LED (Note 107): Solid Green when active, else OFF
-        if (_isPresetSaveActive)
-        {
-            SendRawLed(107, LedGreenFull);
-        }
-        else
-        {
-            SendRawLed(107, LedOff);
-        }
+        // Solo Button LED (Note 107): OFF
+        SendRawLed(107, LedOff);
 
-        SendRawLed(108, LedOff);
+        // Record Arm Preset Button LED (Note 108): ALWAYS LIT Solid Green
+        SendRawLed(108, LedGreenFull);
     }
 
     public void UpdateChannelLeds(int channelIndex)

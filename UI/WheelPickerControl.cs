@@ -29,7 +29,7 @@ public class WheelPickerControl : UserControl
         };
 
         ClipToBounds = true;
-        Height = 150; // Viewport height
+        Height = 190; // Viewport height (5 full rows visible without clipping)
         Content = _wheelContainer;
     }
 
@@ -49,7 +49,7 @@ public class WheelPickerControl : UserControl
                 FontSize = 13,
                 Foreground = Brushes.Gray,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 60, 0, 0)
+                Margin = new Thickness(0, 80, 0, 0)
             };
             _wheelContainer.Children.Add(emptyLabel);
             return;
@@ -94,8 +94,8 @@ public class WheelPickerControl : UserControl
             }
             else
             {
-                // UNSELECTED ITEM (Fades out beyond 2 items)
-                double opacity = dist == 1 ? 0.50 : (dist == 2 ? 0.20 : 0.0);
+                // UNSELECTED ITEM (Smooth fade for items further away)
+                double opacity = dist == 1 ? 0.65 : (dist == 2 ? 0.35 : 0.18);
                 double fontSize = dist == 1 ? 13 : 11;
 
                 itemBorder = new Border
@@ -123,9 +123,9 @@ public class WheelPickerControl : UserControl
             _wheelContainer.Children.Add(itemBorder);
         }
 
-        // Target Y position to center selected item inside 150px viewport
-        // Viewport height = 150px, Center offset = (150 / 2) - (ItemRowHeight / 2) = 75 - 18 = 57px
-        double targetY = 57.0 - (selectedIndex * ItemRowHeight);
+        // Target Y position to center selected item inside 190px viewport
+        // Viewport height = 190px, Center offset = (190 / 2) - (ItemRowHeight / 2) = 95 - 18 = 77.0px
+        double targetY = 77.0 - (selectedIndex * ItemRowHeight);
 
         if (_previousIndex < 0 || Math.Abs(selectedIndex - _previousIndex) > 3)
         {
