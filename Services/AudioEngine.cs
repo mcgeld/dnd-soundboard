@@ -201,6 +201,20 @@ public class AudioEngine : IDisposable
         }
     }
 
+    public void RestoreUnmutedSnapshot(bool[] unmutedChannels)
+    {
+        if (unmutedChannels == null || unmutedChannels.Length < 8) return;
+
+        for (int i = 0; i < 8; i++)
+        {
+            if (_channels[i].LoadedStem != null && unmutedChannels[i])
+            {
+                _channels[i].IsMuted = false;
+                UpdateChannelEffectiveVolumes(i, immediate: false);
+            }
+        }
+    }
+
     public float GetEffectiveVolume(int channelIndex, int trackIndex)
     {
         if (channelIndex < 0 || channelIndex >= 8) return 0.0f;

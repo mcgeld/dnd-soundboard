@@ -55,6 +55,10 @@ public class MidiHardwareService : IDisposable
     private bool _isMuteToggleModeActive = false;
     private readonly bool[] _muteToggleSelectedChannels = new bool[8];
 
+    // Global Mute Toggle Memory Snapshot State (Note 106 Mute Button)
+    private bool _hasGlobalMuteSnapshot = false;
+    private readonly bool[] _globalMutePreviousUnmutedState = new bool[8];
+
     // Hardware Control Dirty Flags & Motion Soft-Catch State
     private readonly bool[] _isFaderDirty = new bool[8];
     private readonly bool[] _isFaderMoving = new bool[8];
@@ -267,6 +271,9 @@ public class MidiHardwareService : IDisposable
             _hudService?.CloseMuteToggleWindow();
             cancelledAny = true;
         }
+
+        // Invalidate global mute restore snapshot whenever another control is touched!
+        _hasGlobalMuteSnapshot = false;
 
         if (cancelledAny)
         {
@@ -655,9 +662,44 @@ public class MidiHardwareService : IDisposable
                     return;
                 }
 
-                Console.WriteLine("[MIDI] Global Master MUTE Button (Note 106) Short-Pressed -> Muting all assigned channels!");
-                CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
-                _audioEngine.MuteAllChannels();
+                bool hasAnyUnmuted = false;
+                for (int c = 0; c < 8; c++)
+                {
+                    if (_audioEngine.Channels[c].LoadedStem != null && !_audioEngine.Channels[c].IsMuted)
+                    {
+                        hasAnyUnmuted = true;
+                        break;
+                    }
+                }
+
+                if (hasAnyUnmuted)
+                {
+                    // MUTE ALL & RECORD SNAPSHOT OF CURRENTLY AUDIBLE CHANNELS
+                    for (int c = 0; c < 8; c++)
+                    {
+                        var ch = _audioEngine.Channels[c];
+                        _globalMutePreviousUnmutedState[c] = ch.LoadedStem != null && !ch.IsMuted;
+                    }
+                    _hasGlobalMuteSnapshot = true;
+
+                    Console.WriteLine("[MIDI] Global Master MUTE (Note 106) Short-Pressed -> Muting all channels & saving unmuted snapshot!");
+                    CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
+                    _audioEngine.MuteAllChannels();
+                }
+                else if (_hasGlobalMuteSnapshot)
+                {
+                    // RESTORE PREVIOUS UNMUTED CHANNELS FROM SNAPSHOT!
+                    Console.WriteLine("[MIDI] Global Master MUTE (Note 106) Short-Pressed -> Restoring previously unmuted channels from snapshot!");
+                    _audioEngine.RestoreUnmutedSnapshot(_globalMutePreviousUnmutedState);
+                    _hasGlobalMuteSnapshot = false;
+                }
+                else
+                {
+                    Console.WriteLine("[MIDI] Global Master MUTE (Note 106) Short-Pressed -> Muting all assigned channels!");
+                    CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
+                    _audioEngine.MuteAllChannels();
+                }
+
                 UpdateAllLeds();
             }
             return;
