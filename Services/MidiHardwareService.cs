@@ -1115,7 +1115,7 @@ public class MidiHardwareService : IDisposable
                             {
                                 _audioEngine.LoadStemToChannel(destCh, stemToLoad);
                                 var chDest = _audioEngine.Channels[destCh];
-                                chDest.IsMuted = snap.IsMuted;
+                                chDest.IsMuted = true; // Always default loaded channels from preset to MUTED
                                 chDest.MasterVolume = snap.MasterVolume;
                                 for (int t = 0; t < 3; t++)
                                 {
