@@ -46,10 +46,14 @@ public class MidiHardwareService : IDisposable
     private bool _isNote106Held = false;
     private bool _wasNote106LongPressHandled = false;
 
-    // Interactive Preset Creation / Save State (Note 107)
+    // Interactive Preset Creation / Save State (Note 108)
     private bool _isPresetSaveActive = false;
     private bool _isPresetNamingStep = false;
     private readonly bool[] _presetSelectedChannels = new bool[8];
+
+    // Interactive Scene Mute Toggle Mode State (Note 107 Solo Button)
+    private bool _isMuteToggleModeActive = false;
+    private readonly bool[] _muteToggleSelectedChannels = new bool[8];
 
     // Hardware Control Dirty Flags & Motion Soft-Catch State
     private readonly bool[] _isFaderDirty = new bool[8];
@@ -253,6 +257,14 @@ public class MidiHardwareService : IDisposable
         if (_isPresetSaveActive)
         {
             CancelPresetSave();
+            cancelledAny = true;
+        }
+
+        if (_isMuteToggleModeActive)
+        {
+            Console.WriteLine("[Mute Toggle] Cancelled Scene Mute Toggle Mode.");
+            _isMuteToggleModeActive = false;
+            _hudService?.CloseMuteToggleWindow();
             cancelledAny = true;
         }
 
@@ -651,6 +663,45 @@ public class MidiHardwareService : IDisposable
             return;
         }
 
+        // SCENE MUTE TOGGLE MACRO BUTTON (Solo / Note 107)
+        if (note == 107)
+        {
+            if (isNoteOn)
+            {
+                if (!_isMuteToggleModeActive)
+                {
+                    Console.WriteLine("[Mute Toggle] Note 107 Pressed -> Entering Scene Mute Toggle Mode");
+                    CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
+
+                    _isMuteToggleModeActive = true;
+                    for (int c = 0; c < 8; c++) _muteToggleSelectedChannels[c] = false;
+
+                    UpdateAllLeds();
+                    _hudService?.ShowMuteToggleWindow(_audioEngine.Channels, _muteToggleSelectedChannels);
+                }
+                else
+                {
+                    // EXECUTE MUTE TOGGLE!
+                    Console.WriteLine("[Mute Toggle] Note 107 Pressed AGAIN -> Executing scene mute toggle!");
+                    int toggledCount = 0;
+                    for (int c = 0; c < 8; c++)
+                    {
+                        if (_muteToggleSelectedChannels[c] && _audioEngine.Channels[c].LoadedStem != null)
+                        {
+                            _audioEngine.ToggleMute(c);
+                            toggledCount++;
+                        }
+                    }
+
+                    Console.WriteLine($"[Mute Toggle] Toggled mute state on {toggledCount} channel(s).");
+                    _isMuteToggleModeActive = false;
+                    _hudService?.CloseMuteToggleWindow();
+                    UpdateAllLeds();
+                }
+            }
+            return;
+        }
+
         // PRESET CREATION / SAVE BUTTON (Record Arm / Note 108)
         if (note == 108)
         {
@@ -1045,6 +1096,18 @@ public class MidiHardwareService : IDisposable
 
     private void OnOperationButtonShortPress(int chIdx)
     {
+        if (_isMuteToggleModeActive)
+        {
+            if (chIdx >= 0 && chIdx < 8 && _audioEngine.Channels[chIdx].LoadedStem != null)
+            {
+                _muteToggleSelectedChannels[chIdx] = !_muteToggleSelectedChannels[chIdx];
+                Console.WriteLine($"[Mute Toggle] Channel {chIdx + 1} selection toggled -> {_muteToggleSelectedChannels[chIdx]}");
+                UpdateAllLeds();
+                _hudService?.UpdateMuteToggleWindow(_audioEngine.Channels, _muteToggleSelectedChannels);
+            }
+            return;
+        }
+
         if (_singleClearChannelIndex >= 0)
         {
             if (_singleClearChannelIndex == chIdx)
@@ -1322,8 +1385,8 @@ public class MidiHardwareService : IDisposable
         // Global Master MUTE Button LED (Note 106): ALWAYS LIT Solid Green
         SendRawLed(106, LedGreenFull);
 
-        // Solo Button LED (Note 107): OFF
-        SendRawLed(107, LedOff);
+        // Solo Mute Toggle Button LED (Note 107): ALWAYS LIT Solid Green
+        SendRawLed(107, LedGreenFull);
 
         // Record Arm Preset Button LED (Note 108): ALWAYS LIT Solid Green
         SendRawLed(108, LedGreenFull);
@@ -1354,6 +1417,25 @@ public class MidiHardwareService : IDisposable
             SendRawLed(topKnobId, redVal);
             SendRawLed(midKnobId, redVal);
             SendRawLed(botKnobId, redVal);
+            return;
+        }
+
+        // MUTE TOGGLE MODE: Operation Buttons light Green (Selected) or Amber (Unselected) for assigned channels!
+        if (_isMuteToggleModeActive)
+        {
+            if (ch.LoadedStem != null)
+            {
+                bool isSelected = _muteToggleSelectedChannels[channelIndex];
+                SendRawLed(operButtonId, isSelected ? LedGreenFull : LedAmberFull);
+            }
+            else
+            {
+                SendRawLed(operButtonId, LedOff);
+            }
+            SendRawLed(muteButtonId, LedOff);
+            SendRawLed(topKnobId, LedOff);
+            SendRawLed(midKnobId, LedOff);
+            SendRawLed(botKnobId, LedOff);
             return;
         }
 

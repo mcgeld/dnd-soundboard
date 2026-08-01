@@ -20,6 +20,7 @@ public class HudService : IDisposable
     private ChannelClearWindow? _clearWindow;
     private MonitorSelectionWindow? _monitorWindow;
     private PresetSaveWindow? _presetSaveWindow;
+    private MuteToggleWindow? _muteToggleWindow;
 
     private readonly List<DisplayMonitorInfo> _monitors;
     private int _targetMonitorIndex = 0;
@@ -60,6 +61,7 @@ public class HudService : IDisposable
                 _clearWindow = new ChannelClearWindow();
                 _monitorWindow = new MonitorSelectionWindow();
                 _presetSaveWindow = new PresetSaveWindow();
+                _muteToggleWindow = new MuteToggleWindow();
 
                 _presetSaveWindow.OnPresetSaveSubmitted += name => OnPresetSaveSubmitted?.Invoke(name);
                 _presetSaveWindow.OnPresetSaveCancelled += () => OnPresetSaveCancelled?.Invoke();
@@ -102,6 +104,7 @@ public class HudService : IDisposable
         _assignmentWindow?.SetTargetMonitor(targetMon);
         _clearWindow?.SetTargetMonitor(targetMon);
         _presetSaveWindow?.SetTargetMonitor(targetMon);
+        _muteToggleWindow?.SetTargetMonitor(targetMon);
     }
 
     public void SetTargetMonitorIndex(int index)
@@ -505,6 +508,75 @@ public class HudService : IDisposable
         }));
     }
 
+    public void ShowMuteToggleWindow(IReadOnlyList<Channel> channels, bool[] selectedFlags)
+    {
+        if (_dispatcher == null || _muteToggleWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _dismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
+                    _monitorWindow?.HideWindow();
+                    _hudWindow?.HideHud();
+                    _assignmentWindow?.HideWindow();
+                    _presetSaveWindow?.HideWindow();
+                    _clearWindow?.HideWindow();
+
+                    _muteToggleWindow.UpdateMuteToggleSelection(channels, selectedFlags);
+                    _muteToggleWindow.ShowWindow();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Mute Toggle Error] Show failed: {ex.Message}");
+            }
+        }));
+    }
+
+    public void UpdateMuteToggleWindow(IReadOnlyList<Channel> channels, bool[] selectedFlags)
+    {
+        if (_dispatcher == null || _muteToggleWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _muteToggleWindow.UpdateMuteToggleSelection(channels, selectedFlags);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Mute Toggle Error] Update failed: {ex.Message}");
+            }
+        }));
+    }
+
+    public void CloseMuteToggleWindow()
+    {
+        if (_dispatcher == null || _muteToggleWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _muteToggleWindow.HideWindow();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Mute Toggle Error] Close failed: {ex.Message}");
+            }
+        }));
+    }
+
     public void Dispose()
     {
         _dismissTimer?.Dispose();
@@ -524,6 +596,8 @@ public class HudService : IDisposable
                 _monitorWindow = null;
                 _presetSaveWindow?.Close();
                 _presetSaveWindow = null;
+                _muteToggleWindow?.Close();
+                _muteToggleWindow = null;
                 System.Windows.Application.Current?.Shutdown();
             }));
         }
