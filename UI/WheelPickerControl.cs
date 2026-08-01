@@ -28,8 +28,8 @@ public class WheelPickerControl : UserControl
             RenderTransform = _translateTransform
         };
 
-        ClipToBounds = false; // Disable hard clipping so items near viewport bounds render smoothly!
-        Height = 220;
+        ClipToBounds = true;
+        Height = 180; // Fixed 180px iOS Barrel Viewport (5 full rows: 2 above, 1 center, 2 below)
         Content = _wheelContainer;
     }
 
@@ -42,7 +42,6 @@ public class WheelPickerControl : UserControl
             _previousIndex = -1;
             _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
             _translateTransform.Y = 0;
-            Height = 150;
 
             var emptyLabel = new TextBlock
             {
@@ -51,15 +50,11 @@ public class WheelPickerControl : UserControl
                 FontSize = 13,
                 Foreground = Brushes.Gray,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 60, 0, 0)
+                Margin = new Thickness(0, 75, 0, 0)
             };
             _wheelContainer.Children.Add(emptyLabel);
             return;
         }
-
-        // Dynamically scale viewport height based on item count so short & long lists fit cleanly!
-        double dynamicHeight = Math.Clamp(items.Count * 36 + 24, 160, 360);
-        Height = dynamicHeight;
 
         selectedIndex = Math.Clamp(selectedIndex, 0, items.Count - 1);
 
@@ -100,8 +95,8 @@ public class WheelPickerControl : UserControl
             }
             else
             {
-                // UNSELECTED ITEM (Clear visible opacity for all rows)
-                double opacity = dist == 1 ? 0.70 : (dist == 2 ? 0.45 : 0.30);
+                // UNSELECTED ITEM (Fades out for items further away)
+                double opacity = dist == 1 ? 0.65 : (dist == 2 ? 0.35 : 0.18);
                 double fontSize = dist == 1 ? 13 : 11;
 
                 itemBorder = new Border
@@ -129,10 +124,9 @@ public class WheelPickerControl : UserControl
             _wheelContainer.Children.Add(itemBorder);
         }
 
-        // Target Y position to center selected item inside dynamicHeight viewport
-        // Center offset = (dynamicHeight / 2) - (ItemRowHeight / 2) = (dynamicHeight / 2) - 18.0px
-        double centerY = (dynamicHeight / 2.0) - 18.0;
-        double targetY = centerY - (selectedIndex * ItemRowHeight);
+        // Target Y position to center selected item inside fixed 180px viewport
+        // Center offset = (180 / 2) - (ItemRowHeight / 2) = 90 - 18 = 72.0px EXACTLY!
+        double targetY = 72.0 - (selectedIndex * ItemRowHeight);
 
         // CLEAR WPF ANIMATION CLOCK TO PREVENT PROPERTY ASSIGNMENT LOCK!
         _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
