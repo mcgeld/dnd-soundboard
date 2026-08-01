@@ -161,8 +161,39 @@ public class ChannelClearWindow : Window
         catch { }
     }
 
+    public void UpdateSingleChannelClear(int channelIndex, Stem stem)
+    {
+        _titleText.Text = $"CLEAR CHANNEL {channelIndex + 1}";
+        _subtitleText.Text = $"Stem: '{stem.Name}' ({stem.CategoryName})";
+        _footerText.Text = $"Press Oper {channelIndex + 1} (Green) to Confirm  ●  Press Mute (Red) to Cancel";
+
+        _channelListStack.Children.Clear();
+        var warningBorder = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 10, 12, 10),
+            Background = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0x47, 0x57)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)),
+            BorderThickness = new Thickness(1)
+        };
+
+        var warningText = new TextBlock
+        {
+            Text = $"Unload stem '{stem.Name}' from Channel {channelIndex + 1}?",
+            FontWeight = FontWeights.Bold,
+            FontSize = 13,
+            Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        warningBorder.Child = warningText;
+        _channelListStack.Children.Add(warningBorder);
+    }
+
     public void UpdateClearSelection(IReadOnlyList<Channel> channels, bool[] selectedFlags)
     {
+        _titleText.Text = "CLEAR CHANNELS MODE";
+        _subtitleText.Text = "Tap Operation buttons (1-8) to toggle channels to clear (Red = Clear).";
+        _footerText.Text = "Press Mute to confirm clear  ●  Long-press Mute to CLEAR ALL";
         _channelListStack.Children.Clear();
 
         int selectedCount = 0;

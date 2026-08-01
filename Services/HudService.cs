@@ -409,6 +409,34 @@ public class HudService : IDisposable
         }));
     }
 
+    public void ShowSingleChannelClear(int channelIndex, Stem stem)
+    {
+        if (_dispatcher == null || _clearWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _dismissTimer?.Dispose();
+                    _isMonitorWindowShowing = false;
+                    _monitorWindow?.HideWindow();
+                    _hudWindow?.HideHud();
+                    _assignmentWindow?.HideWindow();
+                    _presetSaveWindow?.HideWindow();
+
+                    _clearWindow.UpdateSingleChannelClear(channelIndex, stem);
+                    _clearWindow.ShowWindow();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Single Clear Error] Show failed: {ex.Message}");
+            }
+        }));
+    }
+
     public void ShowClearModeWindow(IReadOnlyList<Channel> channels, bool[] selectedFlags)
     {
         if (_dispatcher == null || _clearWindow == null) return;
