@@ -272,8 +272,11 @@ public class MidiHardwareService : IDisposable
             cancelledAny = true;
         }
 
-        // Invalidate global mute restore snapshot whenever another control is touched!
-        _hasGlobalMuteSnapshot = false;
+        // Invalidate global mute restore snapshot whenever a physical channel control (Fader/Knob/Button) is touched!
+        if (sourceChannelIndex >= 0)
+        {
+            _hasGlobalMuteSnapshot = false;
+        }
 
         if (cancelledAny)
         {
