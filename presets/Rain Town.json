@@ -1,0 +1,30 @@
+{
+  "Name": "Rain Town",
+  "CreatedAt": "2026-07-31T22:12:10.146712-06:00",
+  "ChannelSnapshots": [
+    {
+      "RelativeChannelIndex": 0,
+      "CategoryName": "Locale",
+      "StemName": "Road",
+      "MasterVolume": 0.6929134,
+      "TrackVolumes": [
+        0.43307087,
+        0.26771653,
+        0.96850395
+      ],
+      "IsMuted": false
+    },
+    {
+      "RelativeChannelIndex": 1,
+      "CategoryName": "Weather",
+      "StemName": "Thunderstorm",
+      "MasterVolume": 0.23622048,
+      "TrackVolumes": [
+        0.37007874,
+        0.48818898,
+        1
+      ],
+      "IsMuted": false
+    }
+  ]
+}

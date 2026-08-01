@@ -1154,25 +1154,13 @@ public class MidiHardwareService : IDisposable
     {
         if (!_isPresetSaveActive) return;
 
-        int firstChannelIdx = -1;
-        for (int c = 0; c < 8; c++)
-        {
-            if (_presetSelectedChannels[c]) { firstChannelIdx = c; break; }
-        }
-
-        if (firstChannelIdx < 0)
-        {
-            Console.WriteLine("[Preset Save Error] No channels selected.");
-            CancelPresetSave();
-            return;
-        }
-
         var preset = new Preset
         {
             Name = presetName,
             CreatedAt = DateTime.Now
         };
 
+        int relativeIndex = 0;
         for (int c = 0; c < 8; c++)
         {
             if (_presetSelectedChannels[c])
@@ -1182,7 +1170,7 @@ public class MidiHardwareService : IDisposable
                 {
                     preset.ChannelSnapshots.Add(new ChannelSnapshot
                     {
-                        RelativeChannelIndex = c - firstChannelIdx,
+                        RelativeChannelIndex = relativeIndex++,
                         CategoryName = ch.LoadedStem.CategoryName,
                         StemName = ch.LoadedStem.Name,
                         MasterVolume = ch.MasterVolume,
