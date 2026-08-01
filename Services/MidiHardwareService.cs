@@ -1026,9 +1026,10 @@ public class MidiHardwareService : IDisposable
                         // LOAD MULTI-CHANNEL PRESET SEQUENTIALLY STARTING AT targetCh
                         Console.WriteLine($"[Wizard] Channel {targetCh + 1} loading Preset '[{finalPreset.Name}]' with {finalPreset.ChannelSnapshots.Count} channel snapshot(s)...");
 
-                        foreach (var snap in finalPreset.ChannelSnapshots)
+                        for (int i = 0; i < finalPreset.ChannelSnapshots.Count; i++)
                         {
-                            int destCh = targetCh + snap.RelativeChannelIndex;
+                            var snap = finalPreset.ChannelSnapshots[i];
+                            int destCh = targetCh + i;
                             if (destCh >= 8) break; // Exceeds board channels
 
                             // Find matching stem in categories

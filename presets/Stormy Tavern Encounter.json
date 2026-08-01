@@ -1,8 +1,9 @@
 {
   "Name": "Stormy Tavern Encounter",
-  "SavedChannels": [
+  "CreatedAt": "2026-07-31T17:00:00.0000000-06:00",
+  "ChannelSnapshots": [
     {
-      "ChannelIndex": 0,
+      "RelativeChannelIndex": 0,
       "CategoryName": "TabletopAudio",
       "StemName": "backgrounds ogg",
       "MasterVolume": 0.85,
