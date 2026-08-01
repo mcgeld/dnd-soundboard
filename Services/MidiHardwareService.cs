@@ -1216,10 +1216,7 @@ public class MidiHardwareService : IDisposable
     {
         _flashPhase = !_flashPhase;
 
-        if (_isPresetSaveActive)
-        {
-            SendRawLed(107, _flashPhase ? (_isPresetNamingStep ? LedGreenFull : LedAmberFull) : LedOff);
-        }
+
 
         if (_activeWizard != null)
         {
@@ -1256,10 +1253,10 @@ public class MidiHardwareService : IDisposable
         // Global Master MUTE Button LED (Note 106): ALWAYS LIT Solid Green
         SendRawLed(106, LedGreenFull);
 
-        // Preset Save Button LED (Note 107): Flashing Amber (Channel Select) or Green (Naming), else OFF
+        // Preset Save Button LED (Note 107): Solid Green when active, else OFF
         if (_isPresetSaveActive)
         {
-            SendRawLed(107, _flashPhase ? (_isPresetNamingStep ? LedGreenFull : LedAmberFull) : LedOff);
+            SendRawLed(107, LedGreenFull);
         }
         else
         {
@@ -1282,6 +1279,25 @@ public class MidiHardwareService : IDisposable
 
         byte muteButtonId = (byte)(channelIndex < 4 ? 41 + channelIndex : 57 + (channelIndex - 4));
         byte operButtonId = (byte)(channelIndex < 4 ? 73 + channelIndex : 89 + (channelIndex - 4));
+
+        // PRESET SAVE MODE: Operation Buttons light Green (Selected) or Amber (Unselected) for assigned channels!
+        if (_isPresetSaveActive)
+        {
+            if (ch.LoadedStem != null)
+            {
+                bool isSelected = _presetSelectedChannels[channelIndex];
+                SendRawLed(operButtonId, isSelected ? LedGreenFull : LedAmberFull);
+            }
+            else
+            {
+                SendRawLed(operButtonId, LedOff);
+            }
+            SendRawLed(muteButtonId, LedOff);
+            SendRawLed(topKnobId, LedOff);
+            SendRawLed(midKnobId, LedOff);
+            SendRawLed(botKnobId, LedOff);
+            return;
+        }
 
         // CLEAR CHANNEL MODE: Operation Buttons light Red (Selected to clear) or Amber (Unselected) for assigned channels!
         if (_isClearModeActive)
