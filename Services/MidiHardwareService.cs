@@ -803,6 +803,22 @@ public class MidiHardwareService : IDisposable
 
         if (operChIdx >= 0 && operChIdx < 8)
         {
+            // SCENE MUTE TOGGLE MODE: Toggle mute selection via Operation Buttons!
+            if (_isMuteToggleModeActive)
+            {
+                if (isNoteOn)
+                {
+                    if (_audioEngine.Channels[operChIdx].LoadedStem != null)
+                    {
+                        _muteToggleSelectedChannels[operChIdx] = !_muteToggleSelectedChannels[operChIdx];
+                        Console.WriteLine($"[Mute Toggle] Channel {operChIdx + 1} Selection Toggled -> {(_muteToggleSelectedChannels[operChIdx] ? "SELECTED (Green)" : "UNSELECTED (Amber)")}");
+                        UpdateAllLeds();
+                        _hudService?.UpdateMuteToggleWindow(_audioEngine.Channels, _muteToggleSelectedChannels);
+                    }
+                }
+                return;
+            }
+
             // CLEAR CHANNEL MODE: Toggle clear selection via Operation Buttons!
             if (_isClearModeActive)
             {
