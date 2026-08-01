@@ -193,8 +193,28 @@ public class StemAssignmentWindow : Window
         else if (wizard.CurrentStep == AssignmentStep.PresetSelection)
         {
             _stepTitleText.Text = "Select Preset";
-            var presetNames = wizard.Presets.Select(p => p.Name).ToList();
-            _wheelPicker.RenderWheel(presetNames, wizard.SelectedPresetIndex);
+            var presetLabels = wizard.Presets.Select(p => $"{p.Name} ({p.ChannelSnapshots.Count} ch)").ToList();
+            _wheelPicker.RenderWheel(presetLabels, wizard.SelectedPresetIndex);
+
+            var selPreset = wizard.SelectedPreset;
+            if (selPreset != null)
+            {
+                int count = selPreset.ChannelSnapshots.Count;
+                int startCh = wizard.TargetChannelIndex + 1;
+                int endCh = startCh + count - 1;
+
+                if (endCh <= 8)
+                {
+                    _subtitleText.Text = $"{count} channel(s) -> Occupies Ch {startCh} to {endCh} | Oper: Confirm | Mute: Back";
+                    _subtitleText.Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
+                }
+                else
+                {
+                    int truncated = endCh - 8;
+                    _subtitleText.Text = $"{count} channel(s) -> Occupies Ch {startCh} to 8 ({truncated} truncated!) | Oper: Confirm";
+                    _subtitleText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
+                }
+            }
         }
     }
 

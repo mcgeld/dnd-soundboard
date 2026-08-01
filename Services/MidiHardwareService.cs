@@ -1300,7 +1300,7 @@ public class MidiHardwareService : IDisposable
             {
                 SendRawLed(operButtonId, LedOff);
             }
-            SendRawLed(muteButtonId, _flashPhase ? LedRedFull : LedOff);
+            SendRawLed(muteButtonId, LedRedFull);
             SendRawLed(topKnobId, LedOff);
             SendRawLed(midKnobId, LedOff);
             SendRawLed(botKnobId, LedOff);
