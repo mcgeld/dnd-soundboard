@@ -3,33 +3,26 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 
 namespace SoundBoard.UI;
 
 /// <summary>
-/// Compact custom WPF 3D rotating wheel picker control with dead-center alignment for lists of any size.
+/// Clean, fully-visible Glassmorphism Selector Control for MIDI Fader Navigation.
+/// Renders all items cleanly with zero clipping, full text visibility, and glowing selection highlight.
 /// </summary>
 public class WheelPickerControl : UserControl
 {
     private readonly StackPanel _wheelContainer;
-    private readonly TranslateTransform _translateTransform;
-    private int _previousIndex = -1;
-    private const double ItemRowHeight = 36.0;
 
     public WheelPickerControl()
     {
-        _translateTransform = new TranslateTransform();
-
         _wheelContainer = new StackPanel
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Top, // Top-aligned so TranslateTransform coordinates are exact
-            RenderTransform = _translateTransform
+            VerticalAlignment = VerticalAlignment.Top
         };
 
-        ClipToBounds = true;
-        Height = 180; // Fixed 180px iOS Barrel Viewport (5 full rows: 2 above, 1 center, 2 below)
+        ClipToBounds = false;
         Content = _wheelContainer;
     }
 
@@ -39,10 +32,6 @@ public class WheelPickerControl : UserControl
 
         if (items == null || items.Count == 0)
         {
-            _previousIndex = -1;
-            _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
-            _translateTransform.Y = 0;
-
             var emptyLabel = new TextBlock
             {
                 Text = "(No items available)",
@@ -50,7 +39,7 @@ public class WheelPickerControl : UserControl
                 FontSize = 13,
                 Foreground = Brushes.Gray,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 75, 0, 0)
+                Margin = new Thickness(0, 20, 0, 20)
             };
             _wheelContainer.Children.Add(emptyLabel);
             return;
@@ -62,29 +51,28 @@ public class WheelPickerControl : UserControl
         {
             string title = items[i];
             bool isSelected = i == selectedIndex;
-            int dist = Math.Abs(i - selectedIndex);
 
             Border itemBorder;
 
             if (isSelected)
             {
-                // CENTER SELECTED ITEM (Glowing iOS Wheel Highlight)
+                // GLOWING SELECTED ITEM HIGHLIGHT
                 itemBorder = new Border
                 {
-                    Height = 32,
+                    Height = 34,
                     CornerRadius = new CornerRadius(8),
-                    Background = new SolidColorBrush(Color.FromArgb(0x44, 0xA2, 0x9B, 0xFE)),
+                    Background = new SolidColorBrush(Color.FromArgb(0x55, 0xA2, 0x9B, 0xFE)),
                     BorderBrush = new SolidColorBrush(Color.FromRgb(0xA2, 0x9B, 0xFE)),
                     BorderThickness = new Thickness(1.5),
-                    Padding = new Thickness(12, 2, 12, 2),
-                    Margin = new Thickness(0, 2, 0, 2),
+                    Padding = new Thickness(14, 2, 14, 2),
+                    Margin = new Thickness(0, 3, 0, 3),
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
 
                 var text = new TextBlock
                 {
                     Text = title,
-                    FontSize = 16,
+                    FontSize = 14,
                     FontWeight = FontWeights.Bold,
                     Foreground = Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -95,23 +83,23 @@ public class WheelPickerControl : UserControl
             }
             else
             {
-                // UNSELECTED ITEM (Fades out for items further away)
-                double opacity = dist == 1 ? 0.65 : (dist == 2 ? 0.35 : 0.18);
-                double fontSize = dist == 1 ? 13 : 11;
-
+                // UNSELECTED ITEM (Crisp & Fully Visible)
                 itemBorder = new Border
                 {
-                    Height = 32,
-                    Padding = new Thickness(8, 2, 8, 2),
-                    Margin = new Thickness(0, 2, 0, 2),
-                    Opacity = opacity,
+                    Height = 34,
+                    CornerRadius = new CornerRadius(8),
+                    Background = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(12, 2, 12, 2),
+                    Margin = new Thickness(0, 3, 0, 3),
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
 
                 var text = new TextBlock
                 {
                     Text = title,
-                    FontSize = fontSize,
+                    FontSize = 13,
                     FontWeight = FontWeights.SemiBold,
                     Foreground = new SolidColorBrush(Color.FromRgb(0xC7, 0xD2, 0xFE)),
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -123,34 +111,5 @@ public class WheelPickerControl : UserControl
 
             _wheelContainer.Children.Add(itemBorder);
         }
-
-        // Target Y position to center selected item inside fixed 180px viewport
-        // Center offset = (180 / 2) - (ItemRowHeight / 2) = 90 - 18 = 72.0px EXACTLY!
-        double targetY = 72.0 - (selectedIndex * ItemRowHeight);
-
-        // CLEAR WPF ANIMATION CLOCK TO PREVENT PROPERTY ASSIGNMENT LOCK!
-        _translateTransform.BeginAnimation(TranslateTransform.YProperty, null);
-
-        if (_previousIndex < 0 || Math.Abs(selectedIndex - _previousIndex) > 2)
-        {
-            _translateTransform.Y = targetY;
-        }
-        else if (selectedIndex != _previousIndex)
-        {
-            var anim = new DoubleAnimation
-            {
-                From = _translateTransform.Y,
-                To = targetY,
-                Duration = TimeSpan.FromMilliseconds(110),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            _translateTransform.BeginAnimation(TranslateTransform.YProperty, anim);
-        }
-        else
-        {
-            _translateTransform.Y = targetY;
-        }
-
-        _previousIndex = selectedIndex;
     }
 }
