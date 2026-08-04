@@ -215,6 +215,14 @@ public class AudioEngine : IDisposable
         }
     }
 
+    public float GlobalMasterVolume { get; private set; } = 1.0f; // 0.0f to 1.5f (150% gain boost)
+
+    public void SetGlobalMasterVolume(float volume, bool immediate = true)
+    {
+        GlobalMasterVolume = Math.Clamp(volume, 0.0f, 1.5f);
+        UpdateAllEffectiveVolumes(immediate);
+    }
+
     public float GetEffectiveVolume(int channelIndex, int trackIndex)
     {
         if (channelIndex < 0 || channelIndex >= 8) return 0.0f;
@@ -223,7 +231,15 @@ public class AudioEngine : IDisposable
         var channel = _channels[channelIndex];
         if (channel.LoadedStem == null || channel.IsMuted) return 0.0f;
 
-        return channel.MasterVolume * channel.TrackVolumes[trackIndex];
+        return channel.MasterVolume * channel.TrackVolumes[trackIndex] * GlobalMasterVolume;
+    }
+
+    public void UpdateAllEffectiveVolumes(bool immediate = false)
+    {
+        for (int c = 0; c < 8; c++)
+        {
+            UpdateChannelEffectiveVolumes(c, immediate);
+        }
     }
 
     public void UpdateChannelEffectiveVolumes(int channelIndex, bool immediate = false)

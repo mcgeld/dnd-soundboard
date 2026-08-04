@@ -21,6 +21,7 @@ public class HudService : IDisposable
     private MonitorSelectionWindow? _monitorWindow;
     private PresetSaveWindow? _presetSaveWindow;
     private MuteToggleWindow? _muteToggleWindow;
+    private MasterVolumeWindow? _masterVolumeWindow;
 
     private readonly List<DisplayMonitorInfo> _monitors;
     private int _targetMonitorIndex = 0;
@@ -28,6 +29,7 @@ public class HudService : IDisposable
 
     private Timer? _dismissTimer;
     private Timer? _monitorDismissTimer;
+    private Timer? _masterVolumeDismissTimer;
     private readonly object _lock = new();
 
     public event Action<string>? OnPresetSaveSubmitted;
@@ -62,6 +64,7 @@ public class HudService : IDisposable
                 _monitorWindow = new MonitorSelectionWindow();
                 _presetSaveWindow = new PresetSaveWindow();
                 _muteToggleWindow = new MuteToggleWindow();
+                _masterVolumeWindow = new MasterVolumeWindow();
 
                 _presetSaveWindow.OnPresetSaveSubmitted += name => OnPresetSaveSubmitted?.Invoke(name);
                 _presetSaveWindow.OnPresetSaveCancelled += () => OnPresetSaveCancelled?.Invoke();
@@ -105,6 +108,7 @@ public class HudService : IDisposable
         _clearWindow?.SetTargetMonitor(targetMon);
         _presetSaveWindow?.SetTargetMonitor(targetMon);
         _muteToggleWindow?.SetTargetMonitor(targetMon);
+        _masterVolumeWindow?.SetTargetMonitor(targetMon);
     }
 
     public void SetTargetMonitorIndex(int index)
@@ -577,6 +581,45 @@ public class HudService : IDisposable
         }));
     }
 
+    public void ShowMasterVolumeWindow(float globalMasterVolume, int dismissDelayMs = 1500)
+    {
+        if (_dispatcher == null || _masterVolumeWindow == null) return;
+
+        _dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    _masterVolumeWindow.UpdateMasterVolume(globalMasterVolume);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HUD Master Volume Error] Update failed: {ex.Message}");
+            }
+        }));
+
+        lock (_lock)
+        {
+            _masterVolumeDismissTimer?.Dispose();
+            _masterVolumeDismissTimer = new Timer(_ =>
+            {
+                _dispatcher?.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        lock (_lock)
+                        {
+                            _masterVolumeWindow?.Hide();
+                        }
+                    }
+                    catch { }
+                }));
+            }, null, dismissDelayMs, Timeout.Infinite);
+        }
+    }
+
     public void Dispose()
     {
         _dismissTimer?.Dispose();
@@ -598,6 +641,8 @@ public class HudService : IDisposable
                 _presetSaveWindow = null;
                 _muteToggleWindow?.Close();
                 _muteToggleWindow = null;
+                _masterVolumeWindow?.Close();
+                _masterVolumeWindow = null;
                 System.Windows.Application.Current?.Shutdown();
             }));
         }
