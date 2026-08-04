@@ -714,7 +714,7 @@ public class MidiHardwareService : IDisposable
         if (cc == 104)
         {
             bool isPressed = value > 0;
-            SendRawLed(104, isPressed ? LedGreenFull : LedGreenLow);
+            SendRawLed(104, LedAmberFull);
 
             if (isPressed)
             {
@@ -757,7 +757,7 @@ public class MidiHardwareService : IDisposable
         if (cc == 105)
         {
             bool isPressed = value > 0;
-            SendRawLed(105, isPressed ? LedGreenFull : LedGreenLow);
+            SendRawLed(105, LedAmberFull);
 
             if (isPressed)
             {
