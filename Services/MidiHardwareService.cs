@@ -1632,25 +1632,19 @@ public class MidiHardwareService : IDisposable
             UpdateChannelLeds(i);
         }
 
-        // Track Select ▲ Master Volume Up LED (CC 104)
-        SendRawLed(104, _isMasterVolumeHeld && _activeMasterVolumeDirection == +1 ? LedGreenFull : LedGreenLow);
+        // Track Select ▲ Master Volume Up LED (104): ALWAYS LIT Solid Green
+        SendRawLed(104, LedGreenFull);
 
-        // Track Select ▼ Master Volume Down LED (CC 105)
-        SendRawLed(105, _isMasterVolumeHeld && _activeMasterVolumeDirection == -1 ? LedGreenFull : LedGreenLow);
+        // Track Select ▼ Master Volume Down / Device LED (105): ALWAYS LIT Solid Green
+        SendRawLed(105, LedGreenFull);
 
-        // Device Button LED (Note 105): Lit Solid Green if multiple monitors exist, else OFF
-        if (_hudService != null && _hudService.MonitorCount > 1)
-        {
-            SendRawLed(105, LedGreenFull);
-        }
-
-        // Global Master MUTE Button LED (Note 106): ALWAYS LIT Solid Green
+        // Global Master MUTE Button LED (106): ALWAYS LIT Solid Green
         SendRawLed(106, LedGreenFull);
 
-        // Solo Mute Toggle Button LED (Note 107): ALWAYS LIT Solid Green
+        // Solo Mute Toggle Button LED (107): ALWAYS LIT Solid Green
         SendRawLed(107, LedGreenFull);
 
-        // Record Arm Preset Button LED (Note 108): ALWAYS LIT Solid Green
+        // Record Arm Preset Button LED (108): ALWAYS LIT Solid Green
         SendRawLed(108, LedGreenFull);
     }
 
