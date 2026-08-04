@@ -714,6 +714,8 @@ public class MidiHardwareService : IDisposable
         if (cc == 104)
         {
             bool isPressed = value > 0;
+            SendRawLed(104, isPressed ? LedGreenFull : LedGreenLow);
+
             if (isPressed)
             {
                 _activeMasterVolumeDirection = +1;
@@ -725,9 +727,9 @@ public class MidiHardwareService : IDisposable
                 {
                     if (_isMasterVolumeHeld && _activeMasterVolumeDirection == +1)
                     {
-                        AdjustMasterVolume(+0.03f); // Continuous 3% repeat steps
+                        AdjustMasterVolume(+0.02f); // Smooth, continuous 2% repeat steps
                     }
-                }, null, 350, 80);
+                }, null, 300, 50); // 300ms initial delay, 50ms interval (20 FPS smooth update)
             }
             else
             {
@@ -735,7 +737,7 @@ public class MidiHardwareService : IDisposable
                 _activeMasterVolumeDirection = 0;
                 _masterVolumeRepeatTimer?.Dispose();
                 _masterVolumeRepeatTimer = null;
-                UpdateAllLeds();
+                SaveHardwareState(); // Save state ONCE upon button release!
             }
             return;
         }
@@ -744,6 +746,8 @@ public class MidiHardwareService : IDisposable
         if (cc == 105)
         {
             bool isPressed = value > 0;
+            SendRawLed(105, isPressed ? LedGreenFull : LedGreenLow);
+
             if (isPressed)
             {
                 _activeMasterVolumeDirection = -1;
@@ -755,9 +759,9 @@ public class MidiHardwareService : IDisposable
                 {
                     if (_isMasterVolumeHeld && _activeMasterVolumeDirection == -1)
                     {
-                        AdjustMasterVolume(-0.03f); // Continuous 3% repeat steps
+                        AdjustMasterVolume(-0.02f); // Smooth, continuous 2% repeat steps
                     }
-                }, null, 350, 80);
+                }, null, 300, 50);
             }
             else
             {
@@ -765,7 +769,7 @@ public class MidiHardwareService : IDisposable
                 _activeMasterVolumeDirection = 0;
                 _masterVolumeRepeatTimer?.Dispose();
                 _masterVolumeRepeatTimer = null;
-                UpdateAllLeds();
+                SaveHardwareState(); // Save state ONCE upon button release!
             }
             return;
         }
@@ -779,8 +783,6 @@ public class MidiHardwareService : IDisposable
         {
             _audioEngine.SetGlobalMasterVolume(newVol);
             _hudService?.ShowMasterVolumeWindow(newVol);
-            SaveHardwareState();
-            UpdateAllLeds();
         }
     }
 
