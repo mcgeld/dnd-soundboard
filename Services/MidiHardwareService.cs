@@ -59,12 +59,10 @@ public class MidiHardwareService : IDisposable
     private bool _hasGlobalMuteSnapshot = false;
     private readonly bool[] _globalMutePreviousUnmutedState = new bool[8];
 
-    // Master Volume Control & Holding Timer State (Notes 104 ▲ & 105 ▼)
+    // Master Volume Control & Holding Timer State (CC 104 ▲ & CC 105 ▼)
     private Timer? _masterVolumeRepeatTimer;
     private bool _isMasterVolumeHeld = false;
     private int _activeMasterVolumeDirection = 0;
-    private bool _wasNote105LongPressHandled = false;
-    private Timer? _note105LongPressTimer;
 
     // MIDI Hot-Plugging & Dynamic Auto-Reconnect State
     private bool _isConnected = false;
@@ -711,27 +709,12 @@ public class MidiHardwareService : IDisposable
             SaveHardwareState();
             return;
         }
-    }
 
-    private void AdjustMasterVolume(float delta)
-    {
-        float currentVol = _audioEngine.GlobalMasterVolume;
-        float newVol = Math.Clamp(currentVol + delta, 0.0f, 1.5f);
-        if (Math.Abs(newVol - currentVol) > 0.001f)
+        // TRACK SELECT ▲ BUTTON (CC 104) -> Master Volume Up
+        if (cc == 104)
         {
-            _audioEngine.SetGlobalMasterVolume(newVol);
-            _hudService?.ShowMasterVolumeWindow(newVol);
-            SaveHardwareState();
-            UpdateAllLeds();
-        }
-    }
-
-    private void HandleNote(int note, bool isNoteOn)
-    {
-        // MASTER VOLUME UP BUTTON (Track Select ▲ / Note 104)
-        if (note == 104)
-        {
-            if (isNoteOn)
+            bool isPressed = value > 0;
+            if (isPressed)
             {
                 _activeMasterVolumeDirection = +1;
                 _isMasterVolumeHeld = true;
@@ -757,38 +740,22 @@ public class MidiHardwareService : IDisposable
             return;
         }
 
-        // MASTER VOLUME DOWN / MONITOR CYCLE BUTTON (Track Select ▼ / Note 105)
-        if (note == 105)
+        // TRACK SELECT ▼ BUTTON (CC 105) -> Master Volume Down
+        if (cc == 105)
         {
-            if (isNoteOn)
+            bool isPressed = value > 0;
+            if (isPressed)
             {
                 _activeMasterVolumeDirection = -1;
                 _isMasterVolumeHeld = true;
-                _wasNote105LongPressHandled = false;
-
                 AdjustMasterVolume(-0.05f); // Immediate 5% step
-
-                _note105LongPressTimer?.Dispose();
-                _note105LongPressTimer = new Timer(_ =>
-                {
-                    if (_isMasterVolumeHeld && _hudService != null && _hudService.MonitorCount > 1)
-                    {
-                        _wasNote105LongPressHandled = true;
-                        _masterVolumeRepeatTimer?.Dispose();
-                        _masterVolumeRepeatTimer = null;
-                        Console.WriteLine("[MIDI] Note 105 Long-Pressed -> Cycling Target HUD Monitor Display");
-                        _hudService.ShowOrCycleTargetMonitor();
-                        SaveHardwareState();
-                        UpdateAllLeds();
-                    }
-                }, null, 700, Timeout.Infinite);
 
                 _masterVolumeRepeatTimer?.Dispose();
                 _masterVolumeRepeatTimer = new Timer(_ =>
                 {
-                    if (_isMasterVolumeHeld && _activeMasterVolumeDirection == -1 && !_wasNote105LongPressHandled)
+                    if (_isMasterVolumeHeld && _activeMasterVolumeDirection == -1)
                     {
-                        AdjustMasterVolume(-0.03f);
+                        AdjustMasterVolume(-0.03f); // Continuous 3% repeat steps
                     }
                 }, null, 350, 80);
             }
@@ -796,16 +763,45 @@ public class MidiHardwareService : IDisposable
             {
                 _isMasterVolumeHeld = false;
                 _activeMasterVolumeDirection = 0;
-                _note105LongPressTimer?.Dispose();
-                _note105LongPressTimer = null;
                 _masterVolumeRepeatTimer?.Dispose();
                 _masterVolumeRepeatTimer = null;
                 UpdateAllLeds();
+            }
+            return;
+        }
+    }
 
-                if (_wasNote105LongPressHandled)
+    private void AdjustMasterVolume(float delta)
+    {
+        float currentVol = _audioEngine.GlobalMasterVolume;
+        float newVol = Math.Clamp(currentVol + delta, 0.0f, 1.5f);
+        if (Math.Abs(newVol - currentVol) > 0.001f)
+        {
+            _audioEngine.SetGlobalMasterVolume(newVol);
+            _hudService?.ShowMasterVolumeWindow(newVol);
+            SaveHardwareState();
+            UpdateAllLeds();
+        }
+    }
+
+    private void HandleNote(int note, bool isNoteOn)
+    {
+        // DEVICE BUTTON (Note 105) -> Cycle Target HUD Monitor Display
+        if (note == 105)
+        {
+            if (isNoteOn)
+            {
+                if (_hudService != null && _hudService.MonitorCount > 1)
                 {
-                    _wasNote105LongPressHandled = false;
-                    return;
+                    Console.WriteLine("[MIDI] Device Button (Note 105) Pressed -> Displaying/Cycling Target HUD Monitor Display");
+                    CancelActiveWizardsIfOtherControlTouched(-1, isTargetChannelControl: false);
+                    int newMonIdx = _hudService.ShowOrCycleTargetMonitor();
+                    SaveHardwareState();
+                    UpdateAllLeds();
+                }
+                else
+                {
+                    Console.WriteLine("[MIDI] Device Button (Note 105) Pressed -> Single monitor system, cycling skipped.");
                 }
             }
             return;
@@ -1612,21 +1608,16 @@ public class MidiHardwareService : IDisposable
             UpdateChannelLeds(i);
         }
 
-        // Track Select ▲ Master Volume Up LED (Note 104)
+        // Track Select ▲ Master Volume Up LED (CC 104)
         SendRawLed(104, _isMasterVolumeHeld && _activeMasterVolumeDirection == +1 ? LedGreenFull : LedGreenLow);
 
-        // Track Select ▼ Master Volume Down / Device Monitor LED (Note 105)
-        if (_isMasterVolumeHeld && _activeMasterVolumeDirection == -1)
+        // Track Select ▼ Master Volume Down LED (CC 105)
+        SendRawLed(105, _isMasterVolumeHeld && _activeMasterVolumeDirection == -1 ? LedGreenFull : LedGreenLow);
+
+        // Device Button LED (Note 105): Lit Solid Green if multiple monitors exist, else OFF
+        if (_hudService != null && _hudService.MonitorCount > 1)
         {
             SendRawLed(105, LedGreenFull);
-        }
-        else if (_hudService != null && _hudService.MonitorCount > 1)
-        {
-            SendRawLed(105, LedAmberFull);
-        }
-        else
-        {
-            SendRawLed(105, LedGreenLow);
         }
 
         // Global Master MUTE Button LED (Note 106): ALWAYS LIT Solid Green
