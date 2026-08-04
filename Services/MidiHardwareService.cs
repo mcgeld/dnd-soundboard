@@ -66,6 +66,12 @@ public class MidiHardwareService : IDisposable
     private bool _wasNote105LongPressHandled = false;
     private Timer? _note105LongPressTimer;
 
+    // MIDI Hot-Plugging & Dynamic Auto-Reconnect State
+    private bool _isConnected = false;
+    private string _deviceNamePattern = "Launch Control";
+    private readonly Timer _hotPlugTimer;
+    private readonly object _midiDeviceLock = new();
+
     // Hardware Control Dirty Flags & Motion Soft-Catch State
     private readonly bool[] _isFaderDirty = new bool[8];
     private readonly bool[] _isFaderMoving = new bool[8];
@@ -93,6 +99,7 @@ public class MidiHardwareService : IDisposable
         _hudService = hudService;
         _presetStorageService = presetStorageService ?? new PresetStorageService();
         _flashTimer = new Timer(OnFlashTimerTick, null, 400, 400);
+        _hotPlugTimer = new Timer(OnHotPlugTimerTick, null, Timeout.Infinite, Timeout.Infinite);
 
         if (_hudService != null)
         {
@@ -120,6 +127,31 @@ public class MidiHardwareService : IDisposable
 
     public bool Start(string deviceNamePattern = "Launch Control")
     {
+        _deviceNamePattern = deviceNamePattern;
+        bool connected = TryConnectMidiDevicesCore();
+
+        // Start background hot-plug monitor timer (polls every 2.0s for device attach/detach)
+        _hotPlugTimer.Change(1000, 2000);
+        return connected;
+    }
+
+    private void OnHotPlugTimerTick(object? state)
+    {
+        lock (_midiDeviceLock)
+        {
+            if (!_isConnected)
+            {
+                TryConnectMidiDevicesCore();
+            }
+            else
+            {
+                CheckMidiDeviceHealthCore();
+            }
+        }
+    }
+
+    private bool TryConnectMidiDevicesCore()
+    {
         try
         {
             var inDevices = InputDevice.GetAll().ToList();
@@ -127,28 +159,33 @@ public class MidiHardwareService : IDisposable
 
             if (inDevices.Count == 0)
             {
-                Console.WriteLine("[MIDI] No MIDI input devices found on system.");
                 return false;
             }
 
-            _inputDevice = inDevices.FirstOrDefault(d => d.Name.Contains(deviceNamePattern, StringComparison.OrdinalIgnoreCase))
-                ?? inDevices.FirstOrDefault();
+            var targetIn = inDevices.FirstOrDefault(d => d.Name.Contains(_deviceNamePattern, StringComparison.OrdinalIgnoreCase))
+                ?? inDevices.FirstOrDefault(d => d.Name.Contains("Launch", StringComparison.OrdinalIgnoreCase));
 
-            if (_inputDevice != null)
+            if (targetIn == null)
             {
-                Console.WriteLine($"[MIDI] Connected Input: '{_inputDevice.Name}'");
-                _inputDevice.EventReceived += OnMidiEventReceived;
-                _inputDevice.StartEventsListening();
+                return false;
             }
+
+            // Cleanup any stale port objects before connecting
+            CleanupMidiDevicesCore();
+
+            _inputDevice = targetIn;
+            Console.WriteLine($"[MIDI Hot-Plug] Connected Input: '{_inputDevice.Name}'");
+            _inputDevice.EventReceived += OnMidiEventReceived;
+            _inputDevice.StartEventsListening();
 
             foreach (var outDev in outDevices)
             {
-                if (outDev.Name.Contains(deviceNamePattern, StringComparison.OrdinalIgnoreCase) ||
+                if (outDev.Name.Contains(_deviceNamePattern, StringComparison.OrdinalIgnoreCase) ||
                     outDev.Name.Contains("Launch", StringComparison.OrdinalIgnoreCase))
                 {
                     try
                     {
-                        Console.WriteLine($"[MIDI] Connected Output Port for LED: '{outDev.Name}'");
+                        Console.WriteLine($"[MIDI Hot-Plug] Connected Output Port for LED: '{outDev.Name}'");
                         _outputDevices.Add(outDev);
                     }
                     catch (Exception ex)
@@ -164,14 +201,75 @@ public class MidiHardwareService : IDisposable
                 Console.WriteLine($"[MIDI Fallback] Connected Output Port: '{outDevices[0].Name}'");
             }
 
+            _isConnected = true;
+            Console.WriteLine("[MIDI Hot-Plug] Control board connected dynamically and ready!");
+
             RequestHardwareStateDump();
             UpdateAllLeds();
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MIDI Error] Initialization failed: {ex.Message}");
+            Console.WriteLine($"[MIDI Hot-Plug] Connection attempt failed: {ex.Message}");
+            _isConnected = false;
             return false;
+        }
+    }
+
+    private void CheckMidiDeviceHealthCore()
+    {
+        try
+        {
+            if (_inputDevice == null || !_inputDevice.IsListeningForEvents)
+            {
+                Console.WriteLine("[MIDI Hot-Plug] Hardware device input stopped listening.");
+                DisconnectMidiDevicesCore();
+                return;
+            }
+
+            var inDevices = InputDevice.GetAll().ToList();
+            bool stillExists = inDevices.Any(d => d.Name.Equals(_inputDevice.Name, StringComparison.OrdinalIgnoreCase));
+            if (!stillExists)
+            {
+                Console.WriteLine($"[MIDI Hot-Plug] Hardware device '{_inputDevice.Name}' was disconnected/unplugged.");
+                DisconnectMidiDevicesCore();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MIDI Hot-Plug Warning] Health check error: {ex.Message}");
+            DisconnectMidiDevicesCore();
+        }
+    }
+
+    private void DisconnectMidiDevicesCore()
+    {
+        CleanupMidiDevicesCore();
+        _isConnected = false;
+        Console.WriteLine("[MIDI Hot-Plug] Controller disconnected. Monitoring for hardware re-connection...");
+    }
+
+    private void CleanupMidiDevicesCore()
+    {
+        foreach (var outDev in _outputDevices)
+        {
+            try { outDev.Dispose(); } catch { }
+        }
+        _outputDevices.Clear();
+
+        if (_inputDevice != null)
+        {
+            try
+            {
+                _inputDevice.EventReceived -= OnMidiEventReceived;
+                if (_inputDevice.IsListeningForEvents)
+                {
+                    _inputDevice.StopEventsListening();
+                }
+                _inputDevice.Dispose();
+            }
+            catch { }
+            _inputDevice = null;
         }
     }
 
@@ -1784,6 +1882,7 @@ public class MidiHardwareService : IDisposable
 
     public void Dispose()
     {
+        _hotPlugTimer.Dispose();
         _flashTimer.Dispose();
         for (int i = 0; i < 8; i++)
         {
@@ -1797,24 +1896,7 @@ public class MidiHardwareService : IDisposable
             }
         }
         SaveHardwareState();
-
-        foreach (var outDev in _outputDevices)
-        {
-            try { outDev.Dispose(); } catch { }
-        }
-        _outputDevices.Clear();
-
-        if (_inputDevice != null)
-        {
-            _inputDevice.EventReceived -= OnMidiEventReceived;
-            if (_inputDevice.IsListeningForEvents)
-            {
-                _inputDevice.StopEventsListening();
-            }
-            _inputDevice.Dispose();
-            _inputDevice = null;
-        }
-
+        CleanupMidiDevicesCore();
         Console.WriteLine("[MIDI] Disconnected hardware device.");
     }
 }
