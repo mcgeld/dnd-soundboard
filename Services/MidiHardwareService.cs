@@ -1632,11 +1632,11 @@ public class MidiHardwareService : IDisposable
             UpdateChannelLeds(i);
         }
 
-        // Track Select ▲ Master Volume Up LED (104): ALWAYS LIT Solid Green
-        SendRawLed(104, LedGreenFull);
+        // Track Select ▲ Master Volume Up LED (104): ALWAYS LIT Solid Amber
+        SendRawLed(104, LedAmberFull);
 
-        // Track Select ▼ Master Volume Down / Device LED (105): ALWAYS LIT Solid Green
-        SendRawLed(105, LedGreenFull);
+        // Track Select ▼ Master Volume Down / Device LED (105): ALWAYS LIT Solid Amber
+        SendRawLed(105, LedAmberFull);
 
         // Global Master MUTE Button LED (106): ALWAYS LIT Solid Green
         SendRawLed(106, LedGreenFull);
