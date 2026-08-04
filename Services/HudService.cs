@@ -30,6 +30,7 @@ public class HudService : IDisposable
     private Timer? _dismissTimer;
     private Timer? _monitorDismissTimer;
     private Timer? _masterVolumeDismissTimer;
+    private bool _isMasterVolumeWindowShowing = false;
     private readonly object _lock = new();
 
     public event Action<string>? OnPresetSaveSubmitted;
@@ -37,6 +38,7 @@ public class HudService : IDisposable
 
     public int MonitorCount => _monitors.Count;
     public int TargetMonitorIndex => _targetMonitorIndex;
+    public bool IsMasterVolumeWindowShowing => _isMasterVolumeWindowShowing;
 
     public HudService()
     {
@@ -602,6 +604,7 @@ public class HudService : IDisposable
 
         lock (_lock)
         {
+            _isMasterVolumeWindowShowing = true;
             _masterVolumeDismissTimer?.Dispose();
             _masterVolumeDismissTimer = new Timer(_ =>
             {
@@ -611,6 +614,7 @@ public class HudService : IDisposable
                     {
                         lock (_lock)
                         {
+                            _isMasterVolumeWindowShowing = false;
                             _masterVolumeWindow?.Hide();
                         }
                     }

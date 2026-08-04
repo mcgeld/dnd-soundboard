@@ -720,16 +720,27 @@ public class MidiHardwareService : IDisposable
             {
                 _activeMasterVolumeDirection = +1;
                 _isMasterVolumeHeld = true;
-                AdjustMasterVolume(+0.05f); // Immediate 5% step
+
+                bool isWindowShowing = _hudService != null && _hudService.IsMasterVolumeWindowShowing;
+                if (!isWindowShowing)
+                {
+                    // First press: Show current volume without changing it!
+                    _hudService?.ShowMasterVolumeWindow(_audioEngine.GlobalMasterVolume);
+                }
+                else
+                {
+                    // Subsequent press while window is up: Increase volume by 1%!
+                    AdjustMasterVolume(+0.01f);
+                }
 
                 _masterVolumeRepeatTimer?.Dispose();
                 _masterVolumeRepeatTimer = new Timer(_ =>
                 {
                     if (_isMasterVolumeHeld && _activeMasterVolumeDirection == +1)
                     {
-                        AdjustMasterVolume(+0.02f); // Smooth, continuous 2% repeat steps
+                        AdjustMasterVolume(+0.01f); // Continuous 1% repeat steps while held
                     }
-                }, null, 300, 50); // 300ms initial delay, 50ms interval (20 FPS smooth update)
+                }, null, 350, 40); // 350ms hold delay, 40ms repeat interval (25 FPS smooth continuous ramp)
             }
             else
             {
@@ -752,16 +763,27 @@ public class MidiHardwareService : IDisposable
             {
                 _activeMasterVolumeDirection = -1;
                 _isMasterVolumeHeld = true;
-                AdjustMasterVolume(-0.05f); // Immediate 5% step
+
+                bool isWindowShowing = _hudService != null && _hudService.IsMasterVolumeWindowShowing;
+                if (!isWindowShowing)
+                {
+                    // First press: Show current volume without changing it!
+                    _hudService?.ShowMasterVolumeWindow(_audioEngine.GlobalMasterVolume);
+                }
+                else
+                {
+                    // Subsequent press while window is up: Decrease volume by 1%!
+                    AdjustMasterVolume(-0.01f);
+                }
 
                 _masterVolumeRepeatTimer?.Dispose();
                 _masterVolumeRepeatTimer = new Timer(_ =>
                 {
                     if (_isMasterVolumeHeld && _activeMasterVolumeDirection == -1)
                     {
-                        AdjustMasterVolume(-0.02f); // Smooth, continuous 2% repeat steps
+                        AdjustMasterVolume(-0.01f); // Continuous 1% repeat steps while held
                     }
-                }, null, 300, 50);
+                }, null, 350, 40); // 350ms hold delay, 40ms repeat interval (25 FPS smooth continuous ramp)
             }
             else
             {
