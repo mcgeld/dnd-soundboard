@@ -170,49 +170,55 @@ public class StemAssignmentWindow : Window
         int chNum = wizard.TargetChannelIndex + 1;
         _headerBadgeText.Text = $"CHANNEL {chNum} ASSIGNMENT";
         _subtitleText.Text = $"Move Slider {chNum} to rotate wheel | Oper: Confirm | Mute: Back/Cancel";
+        _subtitleText.Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
 
         if (wizard.CurrentStep == AssignmentStep.ModeChoice)
         {
             _stepTitleText.Text = "Select Assignment Type";
-            var options = new List<string> { "Stem", "Preset" };
+            var options = new List<string> { "Music", "Stem", "Preset" };
             _wheelPicker.RenderWheel(options, wizard.SelectedModeIndex);
         }
-        else if (wizard.CurrentStep == AssignmentStep.CategorySelection)
+        else if (wizard.CurrentStep == AssignmentStep.ItemSelection)
         {
-            _stepTitleText.Text = "Select Category";
-            var categoryNames = wizard.Categories.Select(c => c.Name).ToList();
-            _wheelPicker.RenderWheel(categoryNames, wizard.SelectedCategoryIndex);
-        }
-        else if (wizard.CurrentStep == AssignmentStep.StemSelection)
-        {
-            string catName = wizard.CurrentCategory?.Name ?? "Category";
-            _stepTitleText.Text = $"Select Stem ({catName})";
-            var stemNames = wizard.CurrentStems.Select(s => s.Name).ToList();
-            _wheelPicker.RenderWheel(stemNames, wizard.SelectedStemIndex);
-        }
-        else if (wizard.CurrentStep == AssignmentStep.PresetSelection)
-        {
-            _stepTitleText.Text = "Select Preset";
-            var presetLabels = wizard.Presets.Select(p => $"{p.Name} ({p.ChannelSnapshots.Count} ch)").ToList();
-            _wheelPicker.RenderWheel(presetLabels, wizard.SelectedPresetIndex);
-
-            var selPreset = wizard.SelectedPreset;
-            if (selPreset != null)
+            if (wizard.SelectedModeIndex == 0) // Music
             {
-                int count = selPreset.ChannelSnapshots.Count;
-                int startCh = wizard.TargetChannelIndex + 1;
-                int endCh = startCh + count - 1;
+                _stepTitleText.Text = "Select Music Folder";
+                var options = wizard.MusicFolders.Select(f => f.Name).ToList();
+                if (options.Count == 0) options.Add("(No Music Folders Found)");
+                _wheelPicker.RenderWheel(options, wizard.SelectedItemIndex);
+            }
+            else if (wizard.SelectedModeIndex == 1) // Stem
+            {
+                _stepTitleText.Text = "Select Stem Folder";
+                var options = wizard.StemFolders.Select(f => f.Name).ToList();
+                if (options.Count == 0) options.Add("(No Stem Folders Found)");
+                _wheelPicker.RenderWheel(options, wizard.SelectedItemIndex);
+            }
+            else if (wizard.SelectedModeIndex == 2) // Preset
+            {
+                _stepTitleText.Text = "Select Preset";
+                var options = wizard.Presets.Select(p => $"{p.Name} ({p.ChannelSnapshots.Count} ch)").ToList();
+                if (options.Count == 0) options.Add("(No Saved Presets Found)");
+                _wheelPicker.RenderWheel(options, wizard.SelectedItemIndex);
 
-                if (endCh <= 8)
+                var selPreset = wizard.SelectedPreset;
+                if (selPreset != null)
                 {
-                    _subtitleText.Text = $"{count} channel(s) -> Occupies Ch {startCh} to {endCh} | Oper: Confirm | Mute: Back";
-                    _subtitleText.Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
-                }
-                else
-                {
-                    int truncated = endCh - 8;
-                    _subtitleText.Text = $"{count} channel(s) -> Occupies Ch {startCh} to 8 ({truncated} truncated!) | Oper: Confirm";
-                    _subtitleText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
+                    int count = selPreset.ChannelSnapshots.Count;
+                    int startCh = wizard.TargetChannelIndex + 1;
+                    int endCh = startCh + count - 1;
+
+                    if (endCh <= 8)
+                    {
+                        _subtitleText.Text = $"{count} channel(s) -> Occupies Ch {startCh} to {endCh} | Oper: Confirm | Mute: Back";
+                        _subtitleText.Foreground = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
+                    }
+                    else
+                    {
+                        int truncated = endCh - 8;
+                        _subtitleText.Text = $"{count} channel(s) -> Occupies Ch {startCh} to 8 ({truncated} truncated!) | Oper: Confirm";
+                        _subtitleText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57));
+                    }
                 }
             }
         }

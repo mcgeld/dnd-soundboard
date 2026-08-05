@@ -6,45 +6,39 @@ namespace SoundBoard.Models;
 
 public enum AssignmentStep
 {
-    ModeChoice,       // Page 1: "Stem" vs "Preset"
-    CategorySelection, // Category wheel (when "Stem" is selected)
-    StemSelection,     // Stem wheel (when Category is confirmed)
-    PresetSelection    // Preset wheel (when "Preset" is selected)
+    ModeChoice,   // Page 1: "Music" (0), "Stem" (1), "Preset" (2)
+    ItemSelection // Page 2: Final Selection wheel for Music folder, Stem folder, or Preset
 }
 
 /// <summary>
-/// State machine tracking the interactive Channel Assignment Wizard workflow for a channel.
+/// State machine tracking the interactive 2-Step Channel Assignment Wizard workflow.
 /// </summary>
 public class StemAssignmentWizard
 {
     public int TargetChannelIndex { get; }
     public AssignmentStep CurrentStep { get; private set; } = AssignmentStep.ModeChoice;
 
-    // Page 1 Options: 0 = "Stem", 1 = "Preset"
-    public int SelectedModeIndex { get; private set; } = 0; // 0 = Stem, 1 = Preset
+    // Page 1 Options: 0 = "Music", 1 = "Stem", 2 = "Preset"
+    public int SelectedModeIndex { get; private set; } = 0;
 
     public List<Category> Categories { get; }
-    public int SelectedCategoryIndex { get; private set; } = 0;
-
     public List<Preset> Presets { get; }
-    public int SelectedPresetIndex { get; private set; } = 0;
 
-    public List<Stem> CurrentStems => SelectedCategoryIndex >= 0 && SelectedCategoryIndex < Categories.Count
-        ? Categories[SelectedCategoryIndex].Stems
-        : new List<Stem>();
+    public List<Stem> MusicFolders => Categories.FirstOrDefault(c => c.Name.Equals("Music", StringComparison.OrdinalIgnoreCase))?.Stems ?? new List<Stem>();
+    public List<Stem> StemFolders => Categories.FirstOrDefault(c => c.Name.Equals("Stems", StringComparison.OrdinalIgnoreCase) || c.Name.Equals("Stem", StringComparison.OrdinalIgnoreCase))?.Stems ?? new List<Stem>();
 
-    public int SelectedStemIndex { get; private set; } = 0;
+    public int SelectedItemIndex { get; private set; } = 0;
 
-    public Category? CurrentCategory => SelectedCategoryIndex >= 0 && SelectedCategoryIndex < Categories.Count
-        ? Categories[SelectedCategoryIndex]
+    public Stem? SelectedMusicFolder => SelectedItemIndex >= 0 && SelectedItemIndex < MusicFolders.Count
+        ? MusicFolders[SelectedItemIndex]
         : null;
 
-    public Stem? SelectedStem => SelectedStemIndex >= 0 && SelectedStemIndex < CurrentStems.Count
-        ? CurrentStems[SelectedStemIndex]
+    public Stem? SelectedStemFolder => SelectedItemIndex >= 0 && SelectedItemIndex < StemFolders.Count
+        ? StemFolders[SelectedItemIndex]
         : null;
 
-    public Preset? SelectedPreset => SelectedPresetIndex >= 0 && SelectedPresetIndex < Presets.Count
-        ? Presets[SelectedPresetIndex]
+    public Preset? SelectedPreset => SelectedItemIndex >= 0 && SelectedItemIndex < Presets.Count
+        ? Presets[SelectedItemIndex]
         : null;
 
     public StemAssignmentWizard(int targetChannelIndex, List<Category> categories, List<Preset> presets, float initialFaderValue)
@@ -53,16 +47,7 @@ public class StemAssignmentWizard
         Categories = categories;
         Presets = presets;
 
-        // Default to CategorySelection if no presets exist, else start at ModeChoice
-        if (Presets.Count == 0)
-        {
-            CurrentStep = AssignmentStep.CategorySelection;
-        }
-        else
-        {
-            CurrentStep = AssignmentStep.ModeChoice;
-        }
-
+        CurrentStep = AssignmentStep.ModeChoice;
         UpdateFaderPosition(initialFaderValue);
     }
 
@@ -72,27 +57,25 @@ public class StemAssignmentWizard
 
         if (CurrentStep == AssignmentStep.ModeChoice)
         {
-            // 2 options: 0 = Stem, 1 = Preset
-            SelectedModeIndex = inverted < 0.5f ? 0 : 1;
+            // 3 options: 0 = Music, 1 = Stem, 2 = Preset
+            int idx = (int)Math.Floor(inverted * 3.0f);
+            SelectedModeIndex = Math.Clamp(idx, 0, 2);
         }
-        else if (CurrentStep == AssignmentStep.CategorySelection)
+        else if (CurrentStep == AssignmentStep.ItemSelection)
         {
-            if (Categories.Count == 0) return;
-            int idx = (int)Math.Floor(inverted * Categories.Count);
-            SelectedCategoryIndex = Math.Clamp(idx, 0, Categories.Count - 1);
-        }
-        else if (CurrentStep == AssignmentStep.StemSelection)
-        {
-            var stems = CurrentStems;
-            if (stems.Count == 0) return;
-            int idx = (int)Math.Floor(inverted * stems.Count);
-            SelectedStemIndex = Math.Clamp(idx, 0, stems.Count - 1);
-        }
-        else if (CurrentStep == AssignmentStep.PresetSelection)
-        {
-            if (Presets.Count == 0) return;
-            int idx = (int)Math.Floor(inverted * Presets.Count);
-            SelectedPresetIndex = Math.Clamp(idx, 0, Presets.Count - 1);
+            int count = 0;
+            if (SelectedModeIndex == 0) count = MusicFolders.Count;
+            else if (SelectedModeIndex == 1) count = StemFolders.Count;
+            else if (SelectedModeIndex == 2) count = Presets.Count;
+
+            if (count == 0)
+            {
+                SelectedItemIndex = 0;
+                return;
+            }
+
+            int idx = (int)Math.Floor(inverted * count);
+            SelectedItemIndex = Math.Clamp(idx, 0, count - 1);
         }
     }
 
@@ -103,54 +86,28 @@ public class StemAssignmentWizard
 
         if (CurrentStep == AssignmentStep.ModeChoice)
         {
+            SelectedItemIndex = 0;
+            CurrentStep = AssignmentStep.ItemSelection;
+            UpdateFaderPosition(currentFaderVal);
+            return false;
+        }
+        else if (CurrentStep == AssignmentStep.ItemSelection)
+        {
             if (SelectedModeIndex == 0)
             {
-                // Selected "Stem"
-                CurrentStep = AssignmentStep.CategorySelection;
-                UpdateFaderPosition(currentFaderVal);
-                return false;
-            }
-            else
-            {
-                // Selected "Preset"
-                if (Presets.Count > 0)
-                {
-                    CurrentStep = AssignmentStep.PresetSelection;
-                    UpdateFaderPosition(currentFaderVal);
-                    return false;
-                }
-                else
-                {
-                    // Fallback if no presets exist
-                    CurrentStep = AssignmentStep.CategorySelection;
-                    UpdateFaderPosition(currentFaderVal);
-                    return false;
-                }
-            }
-        }
-        else if (CurrentStep == AssignmentStep.CategorySelection)
-        {
-            if (CurrentStems.Count > 0)
-            {
-                CurrentStep = AssignmentStep.StemSelection;
-                UpdateFaderPosition(currentFaderVal);
-                return false;
-            }
-            else
-            {
-                finalStem = null;
+                finalStem = SelectedMusicFolder;
                 return true;
             }
-        }
-        else if (CurrentStep == AssignmentStep.StemSelection)
-        {
-            finalStem = SelectedStem;
-            return true;
-        }
-        else if (CurrentStep == AssignmentStep.PresetSelection)
-        {
-            finalPreset = SelectedPreset;
-            return true;
+            else if (SelectedModeIndex == 1)
+            {
+                finalStem = SelectedStemFolder;
+                return true;
+            }
+            else if (SelectedModeIndex == 2)
+            {
+                finalPreset = SelectedPreset;
+                return true;
+            }
         }
 
         return false;
@@ -158,28 +115,9 @@ public class StemAssignmentWizard
 
     public bool GoBackOrCancel(float currentFaderVal)
     {
-        if (CurrentStep == AssignmentStep.PresetSelection)
+        if (CurrentStep == AssignmentStep.ItemSelection)
         {
             CurrentStep = AssignmentStep.ModeChoice;
-            UpdateFaderPosition(currentFaderVal);
-            return false;
-        }
-        else if (CurrentStep == AssignmentStep.CategorySelection)
-        {
-            if (Presets.Count > 0)
-            {
-                CurrentStep = AssignmentStep.ModeChoice;
-                UpdateFaderPosition(currentFaderVal);
-                return false;
-            }
-            else
-            {
-                return true; // Cancel if no presets exist and already on CategorySelection
-            }
-        }
-        else if (CurrentStep == AssignmentStep.StemSelection)
-        {
-            CurrentStep = AssignmentStep.CategorySelection;
             UpdateFaderPosition(currentFaderVal);
             return false;
         }
