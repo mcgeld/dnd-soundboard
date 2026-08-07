@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using TextBox = System.Windows.Controls.TextBox;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;

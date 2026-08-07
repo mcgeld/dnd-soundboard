@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using UserControl = System.Windows.Controls.UserControl;
 using System.Windows.Media;
 
 namespace SoundBoard.UI;

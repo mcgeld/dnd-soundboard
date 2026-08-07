@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using Timer = System.Threading.Timer;
 using System.Windows.Threading;
 using SoundBoard.Helpers;
 using SoundBoard.Models;
@@ -13,8 +14,7 @@ namespace SoundBoard.Services;
 /// </summary>
 public class HudService : IDisposable
 {
-    private Thread? _uiThread;
-    private Dispatcher? _dispatcher;
+    private Dispatcher _dispatcher = null!;
     private HudOverlayWindow? _hudWindow;
     private StemAssignmentWindow? _assignmentWindow;
     private ChannelClearWindow? _clearWindow;
@@ -48,18 +48,12 @@ public class HudService : IDisposable
 
     private void InitializeUiCore()
     {
-        var readyEvent = new ManualResetEvent(false);
+        _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
-        _uiThread = new Thread(() =>
+        _dispatcher.Invoke(() =>
         {
             try
             {
-                var app = System.Windows.Application.Current ?? new System.Windows.Application
-                {
-                    ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
-                };
-
-                _dispatcher = Dispatcher.CurrentDispatcher;
                 _hudWindow = new HudOverlayWindow();
                 _assignmentWindow = new StemAssignmentWindow();
                 _clearWindow = new ChannelClearWindow();
@@ -72,25 +66,13 @@ public class HudService : IDisposable
                 _presetSaveWindow.OnPresetSaveCancelled += () => OnPresetSaveCancelled?.Invoke();
 
                 ApplyTargetMonitorToAllWindows();
-
-                readyEvent.Set();
-                app.Run();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[HUD Initialization Error] {ex.Message}");
-                readyEvent.Set();
             }
-        })
-        {
-            IsBackground = true,
-            Name = "HUD_Overlay_UI_Thread"
-        };
+        });
 
-        _uiThread.SetApartmentState(ApartmentState.STA);
-        _uiThread.Start();
-
-        readyEvent.WaitOne(3000);
         Console.WriteLine($"[HUD] TopMost Glassmorphism HUD Overlay Service initialized ({_monitors.Count} monitor(s) detected).");
     }
 

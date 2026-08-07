@@ -113,6 +113,30 @@ public class PresetStorageService
         return presets.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    public bool DeletePreset(string presetName, string presetsDirectory = "./presets")
+    {
+        try
+        {
+            string fileName = presetName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                ? presetName
+                : SanitizeFileName(presetName) + ".json";
+
+            string filePath = Path.Combine(presetsDirectory, fileName);
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+                Console.WriteLine($"[PresetStorageService] Deleted preset file: '{filePath}'.");
+                return true;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PresetStorageService Error] Failed to delete preset '{presetName}': {ex.Message}");
+            return false;
+        }
+    }
+
     private static string SanitizeFileName(string name)
     {
         foreach (char c in Path.GetInvalidFileNameChars())

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Timer = System.Threading.Timer;
 using NAudio.Vorbis;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;

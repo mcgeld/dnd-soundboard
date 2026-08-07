@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using Timer = System.Threading.Timer;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using SoundBoard.Models;

@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows;
 using SoundBoard.Models;
 using SoundBoard.Services;
+using SoundBoard.UI;
 
 namespace SoundBoard;
 
@@ -11,85 +14,79 @@ class Program
     [STAThread]
     static void Main(string[] args)
     {
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
-        Console.WriteLine("=================================================================");
-        Console.WriteLine("  TTRPG MIDI Audio Mixer & Stem Controller (3D Wheel Wizard)");
-        Console.WriteLine("=================================================================");
-        Console.WriteLine();
+        try
+        {
+            System.Windows.Forms.Application.EnableVisualStyles();
+            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
-        // 1. Scan audio library
-        var libraryService = new AudioLibraryService();
-        var categories = libraryService.ScanAudioLibrary("./audio");
+            // 1. Initialize WPF Application with explicit shutdown mode
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 
-        // 2. Initialize Audio Engine, HUD Overlay Service, and MIDI Hardware Service
+            // 2. Scan audio library
+            var libraryService = new AudioLibraryService();
+            var presetStorage = new PresetStorageService();
+            var categories = libraryService.ScanAudioLibrary("./audio");
+
+        // 3. Initialize Core Audio, HUD, and MIDI Services
         using var audioEngine = new AudioEngine();
         using var hudService = new HudService();
-        using var midiService = new MidiHardwareService(audioEngine, hudService);
+        using var midiService = new MidiHardwareService(audioEngine, hudService, presetStorage);
 
-        // Pass scanned audio categories to MIDI service for hardware Stem Assignment Wizard
         midiService.SetCategories(categories);
 
-        // 3. Connect to MIDI hardware and sync LEDs
+        // 4. Initialize Windows System Tray Service
+        using var trayService = new SystemTrayService();
+
+        ManagerWindow? managerWindow = null;
+
+        // Tray Service Action Handlers
+        trayService.OnOpenManagerRequested += () =>
+        {
+            app.Dispatcher.Invoke(() =>
+            {
+                if (managerWindow == null || !managerWindow.IsLoaded)
+                {
+                    managerWindow = new ManagerWindow(audioEngine, libraryService, presetStorage, hudService, categories, () =>
+                    {
+                        var freshCategories = libraryService.ScanAudioLibrary("./audio");
+                        midiService.SetCategories(freshCategories);
+                    });
+                    managerWindow.Show();
+                }
+                else
+                {
+                    managerWindow.Activate();
+                }
+            });
+        };
+
+        trayService.OnRescanRequested += () =>
+        {
+            var freshCategories = libraryService.ScanAudioLibrary("./audio");
+            midiService.SetCategories(freshCategories);
+            int count = freshCategories.Sum(c => c.Stems.Count);
+            trayService.ShowNotification("Audio Library Rescanned", $"Found {count} Music & Stem folders in ./audio.");
+        };
+
+        trayService.OnExitRequested += () =>
+        {
+            System.Windows.Forms.Application.Exit();
+        };
+
+        // 5. Connect MIDI controller (runs background hot-plug timer)
         midiService.Start("Launch Control");
 
-        // Display Active Mixer Matrix Status
-        Console.WriteLine();
-        Console.WriteLine("=================================================================");
-        Console.WriteLine("  Audio Mixer Matrix & Hardware Control Status:");
-        Console.WriteLine("=================================================================");
-        for (int i = 0; i < 8; i++)
-        {
-            var ch = audioEngine.Channels[i];
-            if (ch.LoadedStem != null)
-            {
-                int trackCount = ch.LoadedStem.Tracks.Count;
-                Console.WriteLine($"  Channel {i}: Loaded Stem '[{ch.LoadedStem.Name}]' ({ch.LoadedStem.CategoryName})");
-                Console.WriteLine($"            - Allocation: {trackCount} tracks (Bottom-to-Top Dials)");
-                Console.WriteLine($"            - Dial LEDs: {trackCount} Green / {3 - trackCount} OFF");
-                Console.WriteLine($"            - Mute LED: Solid Red (Unmuted) / Slow Flashing Red (Muted)");
-                Console.WriteLine($"            - Operation LED: Solid Green -> Short-press: HUD | Long-press (>=600ms): 3D Wheel Wizard!");
-                for (int t = 0; t < trackCount; t++)
-                {
-                    Console.WriteLine($"               └── Knob {3 - t} (Dial {t + 1}) -> {ch.LoadedStem.Tracks[t].FileName}");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"  Channel {i}: Unassigned (All LEDs OFF)");
-            }
+        trayService.ShowNotification(
+            "TTRPG SoundBoard Active",
+            "Running in System Tray. Plug in your Launch Control XL at any time!"
+        );
+
+        // 6. Start Windows Application Event Loop for System Tray Service
+        System.Windows.Forms.Application.Run();
         }
-
-        Console.WriteLine();
-        Console.WriteLine("-----------------------------------------------------------------");
-        Console.WriteLine(" Press 'H' : Test Show HUD Overlay manually");
-        Console.WriteLine(" Press 'Q' : Exit application");
-        Console.WriteLine("-----------------------------------------------------------------");
-
-        while (true)
+        catch (Exception ex)
         {
-            if (Console.IsInputRedirected)
-            {
-                string? line = Console.ReadLine();
-                if (line == null || line.Trim().Equals("q", StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine("\n[System] Shutting down Audio Mixer and Engine...");
-                    break;
-                }
-            }
-            else
-            {
-                var keyInfo = Console.ReadKey(intercept: true);
-                if (keyInfo.Key == ConsoleKey.Q)
-                {
-                    Console.WriteLine("\n[System] Shutting down Audio Mixer and Engine...");
-                    break;
-                }
-                else if (keyInfo.Key == ConsoleKey.H)
-                {
-                    Console.WriteLine("\n[Manual Test] Triggering Unified Channel Overview HUD for Channel 0...");
-                    hudService.ShowChannelOverview(0, audioEngine.Channels[0], activeControl: "", dismissDelayMs: 3000);
-                }
-            }
+            File.WriteAllText("./crash.log", ex.ToString());
         }
     }
 }
