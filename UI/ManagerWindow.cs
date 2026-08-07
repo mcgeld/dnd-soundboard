@@ -39,7 +39,7 @@ public class ManagerWindow : Window
 
     private Stem? _selectedStem;
     private NAudio.Wave.WaveOutEvent? _previewPlayer;
-    private NAudio.Wave.AudioFileReader? _previewReader;
+    private NAudio.Wave.WaveStream? _previewReader;
 
     public ManagerWindow(
         AudioEngine audioEngine,
@@ -354,7 +354,16 @@ public class ManagerWindow : Window
             StopPreviewAudio();
             try
             {
-                _previewReader = new NAudio.Wave.AudioFileReader(trackObj.FilePath);
+                string ext = Path.GetExtension(trackObj.FilePath).ToLowerInvariant();
+                if (ext == ".ogg")
+                {
+                    _previewReader = new NAudio.Vorbis.VorbisWaveReader(trackObj.FilePath);
+                }
+                else
+                {
+                    _previewReader = new NAudio.Wave.AudioFileReader(trackObj.FilePath);
+                }
+
                 _previewPlayer = new NAudio.Wave.WaveOutEvent();
                 _previewPlayer.Init(_previewReader);
                 _previewPlayer.Play();
